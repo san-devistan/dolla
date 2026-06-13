@@ -6,7 +6,7 @@ import { ArrowUpRightIcon, DownloadIcon, RadioTowerIcon } from "lucide-react"
 
 function StyleShowcase() {
   return (
-    <main className="min-h-svh bg-background text-foreground">
+    <main className="min-h-[90svh] bg-background text-foreground">
       <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:56px_56px] opacity-35" />
       <section className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-5 sm:px-6 lg:px-8">
         <ShowcaseHeader />

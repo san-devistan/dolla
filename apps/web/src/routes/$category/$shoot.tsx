@@ -12,17 +12,13 @@ import {
   getImageLoadingProps,
 } from "@/features/cloudinary/image-delivery"
 import { ProgressiveImage } from "@/features/cloudinary/progressive-image"
+import { getMediaCategoryRoute, getMediaShootRoute } from "@/lib/admin-routes"
 import type {
   CloudinaryAsset,
   CloudinaryConnection,
   CloudinaryFolder,
   CloudinaryShootPage,
 } from "@/lib/cloudinary.server"
-import {
-  getMediaAdminSearch,
-  isMediaAdminMode,
-  validateMediaAdminSearch,
-} from "@/lib/media-admin-mode"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
@@ -60,23 +56,48 @@ import {
 import {
   type ChangeEvent,
   type DragEvent,
+  Fragment,
   type FormEvent,
   type MouseEvent,
   type RefObject,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
 } from "react"
 
 type AssetDropPosition = "before" | "after"
-type AssetDropTarget = {
-  assetId: string
-  position: AssetDropPosition
+type AssetDropTarget =
+  | {
+      assetId: string
+      position: AssetDropPosition
+      type: "asset"
+    }
+  | {
+      columnIndex: number
+      type: "column-end"
+    }
+type AssetDropMove = {
+  assets: CloudinaryAsset[]
+  columnCount: number
+  draggedAssetId: string
+  dropPosition: AssetDropPosition
+  targetAssetId: string
 }
 
+const DEFAULT_MASONRY_COLUMN_COUNT = 1
+const ASSET_ORDER_STEP = 1000
+const MASONRY_COLUMN_KEYS = [
+  "masonry-column-1",
+  "masonry-column-2",
+  "masonry-column-3",
+  "masonry-column-4",
+] as const
+const TABLET_MASONRY_MEDIA_QUERY = "(min-width: 640px)"
+const DESKTOP_MASONRY_MEDIA_QUERY = "(min-width: 1024px)"
+
 export const Route = createFileRoute("/$category/$shoot")({
-  validateSearch: validateMediaAdminSearch,
   loader: ({ params }) =>
     getCloudinaryShootFn({
       data: {
@@ -84,14 +105,66 @@ export const Route = createFileRoute("/$category/$shoot")({
         shootName: params.shoot,
       },
     }),
-  component: ShootPage,
+  component: PublicShootPage,
 })
 
-function ShootPage() {
+function useMasonryColumnCount() {
+  const [columnCount, setColumnCount] = useState(DEFAULT_MASONRY_COLUMN_COUNT)
+
+  useEffect(() => {
+    const tabletMediaQuery = window.matchMedia(TABLET_MASONRY_MEDIA_QUERY)
+    const desktopMediaQuery = window.matchMedia(DESKTOP_MASONRY_MEDIA_QUERY)
+
+    function syncColumnCount() {
+      if (desktopMediaQuery.matches) {
+        setColumnCount(4)
+
+        return
+      }
+
+      setColumnCount(tabletMediaQuery.matches ? 2 : 1)
+    }
+
+    syncColumnCount()
+    tabletMediaQuery.addEventListener("change", syncColumnCount)
+    desktopMediaQuery.addEventListener("change", syncColumnCount)
+
+    return () => {
+      tabletMediaQuery.removeEventListener("change", syncColumnCount)
+      desktopMediaQuery.removeEventListener("change", syncColumnCount)
+    }
+  }, [])
+
+  return columnCount
+}
+
+type ShootRouteParams = {
+  category: string
+  shoot: string
+}
+
+function PublicShootPage() {
   const initialShootPage = Route.useLoaderData()
   const params = Route.useParams()
-  const search = Route.useSearch()
-  const isAdminMode = isMediaAdminMode(search)
+
+  return (
+    <ShootPage
+      initialShootPage={initialShootPage}
+      isAdminMode={false}
+      params={params}
+    />
+  )
+}
+
+function ShootPage({
+  initialShootPage,
+  isAdminMode,
+  params,
+}: {
+  initialShootPage: CloudinaryShootPage
+  isAdminMode: boolean
+  params: ShootRouteParams
+}) {
   const navigate = useNavigate()
   const [shootPage, setShootPage] = useState(initialShootPage)
   const [renameName, setRenameName] = useState(
@@ -112,6 +185,7 @@ function ShootPage() {
     null
   )
   const uploadInputRef = useRef<HTMLInputElement>(null)
+  const masonryColumnCount = useMasonryColumnCount()
 
   const getShoot = useServerFn(getCloudinaryShootFn)
   const renameFolder = useServerFn(renameCloudinaryFolderFn)
@@ -272,12 +346,11 @@ function ShootPage() {
         setIsRenamingShoot(false)
 
         void navigate({
-          to: "/$category/$shoot",
+          to: getMediaShootRoute(isAdminMode),
           params: {
             category: toMediaRouteSegment(categoryFolder.name),
             shoot: toMediaRouteSegment(nextName),
           },
-          search: getMediaAdminSearch(true),
         })
 
         return undefined
@@ -359,9 +432,8 @@ function ShootPage() {
     }, "Shoot deleted").then((didSucceed) => {
       if (didSucceed) {
         void navigate({
-          to: "/$category",
+          to: getMediaCategoryRoute(isAdminMode),
           params: { category: toMediaRouteSegment(categoryFolder.name) },
-          search: getMediaAdminSearch(true),
         })
       }
 
@@ -412,13 +484,39 @@ function ShootPage() {
 
     setDropTarget((currentDropTarget) => {
       if (
+        currentDropTarget?.type === "asset" &&
         currentDropTarget?.assetId === assetId &&
         currentDropTarget.position === position
       ) {
         return currentDropTarget
       }
 
-      return { assetId, position }
+      return { assetId, position, type: "asset" }
+    })
+  }
+
+  function handleAssetInsertionDragOver(
+    event: DragEvent<HTMLElement>,
+    assetId: string,
+    position: AssetDropPosition
+  ) {
+    if (!canOrganizeAssets || draggingAssetId === assetId) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+
+    setDropTarget((currentDropTarget) => {
+      if (
+        currentDropTarget?.type === "asset" &&
+        currentDropTarget?.assetId === assetId &&
+        currentDropTarget.position === position
+      ) {
+        return currentDropTarget
+      }
+
+      return { assetId, position, type: "asset" }
     })
   }
 
@@ -432,7 +530,7 @@ function ShootPage() {
     const draggedAssetId =
       event.dataTransfer.getData("text/plain") || draggingAssetId
     const dropPosition =
-      dropTarget?.assetId === assetId
+      dropTarget?.type === "asset" && dropTarget.assetId === assetId
         ? dropTarget.position
         : getAssetDropPosition(event)
 
@@ -440,11 +538,66 @@ function ShootPage() {
       return
     }
 
-    const nextAssets = moveAssetToDropTarget(
+    const nextAssets = moveAssetToDropTarget({
+      assets: shootPage.assets,
+      columnCount: masonryColumnCount,
+      draggedAssetId,
+      targetAssetId: assetId,
+      dropPosition,
+    })
+
+    if (!nextAssets) {
+      return
+    }
+
+    saveAssetOrder(nextAssets)
+  }
+
+  function handleColumnDragOver(
+    event: DragEvent<HTMLElement>,
+    columnIndex: number
+  ) {
+    if (!canOrganizeAssets || !draggingAssetId) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+
+    setDropTarget((currentDropTarget) => {
+      if (
+        currentDropTarget?.type === "column-end" &&
+        currentDropTarget.columnIndex === columnIndex
+      ) {
+        return currentDropTarget
+      }
+
+      return { columnIndex, type: "column-end" }
+    })
+  }
+
+  function handleColumnDrop(
+    event: DragEvent<HTMLElement>,
+    columnIndex: number
+  ) {
+    if (!canOrganizeAssets) {
+      return
+    }
+
+    event.preventDefault()
+
+    const draggedAssetId =
+      event.dataTransfer.getData("text/plain") || draggingAssetId
+
+    if (!draggedAssetId) {
+      return
+    }
+
+    const nextAssets = moveAssetToColumnEnd(
       shootPage.assets,
       draggedAssetId,
-      assetId,
-      dropPosition
+      columnIndex,
+      masonryColumnCount
     )
 
     if (!nextAssets) {
@@ -463,7 +616,7 @@ function ShootPage() {
     const previousShootPage = shootPage
     const orderedAssets = nextAssets.map((asset, index) => ({
       ...asset,
-      orderRank: (index + 1) * 1000,
+      orderRank: (index + 1) * ASSET_ORDER_STEP,
     }))
 
     setShootPage({
@@ -478,6 +631,7 @@ function ShootPage() {
         shootPath: shootFolder.path,
         selectedFolder: shootFolder.path,
         assetIds: orderedAssets.map((asset) => asset.assetId),
+        assetLayouts: getAssetLayoutOrder(orderedAssets, masonryColumnCount),
       },
     })
       .then(() => {
@@ -636,6 +790,7 @@ function ShootPage() {
       <PhotoMasonry
         assets={shootPage.assets}
         canOrganizeAssets={canOrganizeAssets}
+        columnCount={masonryColumnCount}
         draggingAssetId={draggingAssetId}
         dropTarget={dropTarget}
         isAdminMode={isAdminMode}
@@ -643,10 +798,13 @@ function ShootPage() {
         selectedAssetIds={selectedAssetIds}
         shoot={shootFolder}
         onAssetDragEnd={handleAssetDragEnd}
+        onAssetInsertionDragOver={handleAssetInsertionDragOver}
         onAssetDragOver={handleAssetDragOver}
         onAssetDragStart={handleAssetDragStart}
         onAssetDrop={handleAssetDrop}
         onAssetSelectionChange={toggleAssetSelection}
+        onColumnDragOver={handleColumnDragOver}
+        onColumnDrop={handleColumnDrop}
         onOpenAsset={openAssetViewer}
         onSetShootCover={handleSetShootCover}
       />
@@ -680,6 +838,8 @@ function ShootPage() {
     </>
   )
 }
+
+export { ShootPage }
 
 function ShootTitle({
   canUpload,
@@ -732,21 +892,20 @@ function ShootTitle({
   }, [isRenamingShoot])
 
   return (
-    <section className="mx-auto w-full max-w-[1540px] px-4 pb-8 sm:px-6 lg:px-8">
+    <section className="mx-auto w-full max-w-[1540px] px-4 pt-2 pb-5 sm:px-6 md:pt-0 md:pb-8 lg:px-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <Link
-            to="/$category"
+            to={getMediaCategoryRoute(isAdminMode)}
             params={{ category: toMediaRouteSegment(category.name) }}
-            search={getMediaAdminSearch(isAdminMode)}
             aria-label={`Go back to ${category.name}`}
-            className="group/back inline-flex items-center gap-1.5 text-[0.6875rem] leading-none font-medium tracking-[0.08em] text-muted-foreground/80 lowercase transition-colors hover:text-brand"
+            className="group/back hidden items-center gap-1.5 text-[0.6875rem] leading-none font-medium tracking-[0.08em] text-muted-foreground/80 lowercase transition-colors hover:text-brand md:inline-flex"
           >
             <ArrowLeftIcon
               aria-hidden="true"
               className="size-3.5 shrink-0 transition-transform group-hover/back:-translate-x-0.5"
             />
-            <span>go back</span>
+            <span>retour</span>
           </Link>
           {isRenamingShoot ? (
             <form
@@ -757,7 +916,7 @@ function ShootTitle({
                 ref={renameInputRef}
                 aria-label="Shoot folder name"
                 value={renameName}
-                className="h-auto border-x-0 border-t-0 py-0 font-heading text-5xl leading-none tracking-normal md:text-6xl"
+                className="h-auto border-x-0 border-t-0 py-0 font-heading text-4xl leading-none tracking-normal md:text-6xl"
                 disabled={!canRenameShoot || isBusy}
                 onChange={(event) => onRenameNameChange(event.target.value)}
               />
@@ -781,7 +940,7 @@ function ShootTitle({
               </Button>
             </form>
           ) : (
-            <h1 className="mt-2 font-heading text-5xl leading-none tracking-normal md:text-6xl">
+            <h1 className="mt-2 font-heading text-4xl leading-none tracking-normal md:text-6xl">
               {shoot.name}
             </h1>
           )}
@@ -928,6 +1087,7 @@ function DeleteShootDialog({
 function PhotoMasonry({
   assets,
   canOrganizeAssets,
+  columnCount,
   draggingAssetId,
   dropTarget,
   isAdminMode,
@@ -935,15 +1095,19 @@ function PhotoMasonry({
   selectedAssetIds,
   shoot,
   onAssetDragEnd,
+  onAssetInsertionDragOver,
   onAssetDragOver,
   onAssetDragStart,
   onAssetDrop,
   onAssetSelectionChange,
+  onColumnDragOver,
+  onColumnDrop,
   onOpenAsset,
   onSetShootCover,
 }: {
   assets: CloudinaryAsset[]
   canOrganizeAssets: boolean
+  columnCount: number
   draggingAssetId: string | null
   dropTarget: AssetDropTarget | null
   isAdminMode: boolean
@@ -951,13 +1115,36 @@ function PhotoMasonry({
   selectedAssetIds: Set<string>
   shoot: CloudinaryFolder
   onAssetDragEnd: () => void
+  onAssetInsertionDragOver: (
+    event: DragEvent<HTMLElement>,
+    assetId: string,
+    position: AssetDropPosition
+  ) => void
   onAssetDragOver: (event: DragEvent<HTMLElement>, assetId: string) => void
   onAssetDragStart: (event: DragEvent<HTMLElement>, assetId: string) => void
   onAssetDrop: (event: DragEvent<HTMLElement>, assetId: string) => void
   onAssetSelectionChange: (assetId: string, selected?: boolean) => void
+  onColumnDragOver: (event: DragEvent<HTMLElement>, columnIndex: number) => void
+  onColumnDrop: (event: DragEvent<HTMLElement>, columnIndex: number) => void
   onOpenAsset: (assetId: string) => void
   onSetShootCover: (assetId: string) => void
 }) {
+  const masonryColumns = useMemo(
+    () => buildMasonryColumns(assets, columnCount),
+    [assets, columnCount]
+  )
+  const visualAssets = useMemo(
+    () => flattenMasonryColumns(masonryColumns),
+    [masonryColumns]
+  )
+  const assetIndexesById = useMemo(
+    () =>
+      new Map(
+        visualAssets.map((asset, index) => [asset.assetId, index] as const)
+      ),
+    [visualAssets]
+  )
+
   if (assets.length === 0) {
     return (
       <section className="mx-auto w-full max-w-[1540px] px-4 py-16 text-sm text-muted-foreground sm:px-6 lg:px-8">
@@ -970,65 +1157,182 @@ function PhotoMasonry({
 
   return (
     <section className="mx-auto w-full max-w-[1540px] px-4 pb-6 sm:px-6 lg:px-8">
-      <div className="columns-1 gap-5 sm:columns-2 lg:columns-4">
-        {assets.map((asset, index) =>
-          isAdminMode ? (
-            <AdminPhotoCard
-              key={asset.assetId}
-              asset={asset}
-              canOrganizeAssets={canOrganizeAssets}
-              dropPosition={
-                dropTarget?.assetId === asset.assetId &&
+      <div
+        className={cn(
+          "grid gap-5",
+          columnCount === 1
+            ? "grid-cols-1"
+            : columnCount === 2
+              ? "grid-cols-2"
+              : "grid-cols-4"
+        )}
+      >
+        {masonryColumns.map((columnAssets, columnIndex) => (
+          <div
+            key={MASONRY_COLUMN_KEYS[columnIndex]}
+            className="flex min-w-0 flex-col gap-5 self-start"
+            onDragOver={(event) => {
+              if (event.target === event.currentTarget) {
+                onColumnDragOver(event, columnIndex)
+              }
+            }}
+            onDrop={(event) => {
+              if (event.target === event.currentTarget) {
+                onColumnDrop(event, columnIndex)
+              }
+            }}
+          >
+            {columnAssets.map((asset) => {
+              const assetIndex = assetIndexesById.get(asset.assetId) ?? -1
+              const activeDropPosition =
+                dropTarget?.type === "asset" &&
+                dropTarget.assetId === asset.assetId &&
                 draggingAssetId !== asset.assetId
                   ? dropTarget.position
                   : null
-              }
-              effectiveCoverAssetId={effectiveCoverAssetId}
-              isDragging={draggingAssetId === asset.assetId}
-              isBusy={isBusy}
-              isPriority={index < 6}
-              isSelected={selectedAssetIds.has(asset.assetId)}
-              onAssetDragEnd={onAssetDragEnd}
-              onAssetDragOver={onAssetDragOver}
-              onAssetDragStart={onAssetDragStart}
-              onAssetDrop={onAssetDrop}
-              onAssetSelectionChange={onAssetSelectionChange}
-              onSetShootCover={onSetShootCover}
-            />
-          ) : (
-            <button
-              type="button"
-              key={asset.assetId}
-              className={cn(
-                "group relative mb-5 block w-full break-inside-avoid overflow-hidden bg-muted text-left",
-                getAssetFrameClass(asset)
-              )}
-              onClick={() => {
-                preloadViewerAssetsAround(assets, asset.assetId)
-                onOpenAsset(asset.assetId)
-              }}
-              onFocus={() => preloadViewerAssetsAround(assets, asset.assetId)}
-              onPointerDown={() =>
-                preloadViewerAssetsAround(assets, asset.assetId)
-              }
-              onPointerEnter={() =>
-                preloadViewerAssetsAround(assets, asset.assetId)
-              }
-            >
-              <ProgressiveImage
-                src={asset.thumbnailUrl}
-                srcSet={asset.thumbnailSrcSet}
-                sizes={MASONRY_IMAGE_SIZES}
-                alt={asset.displayName}
-                className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.035]"
-                {...getImageLoadingProps(index < 6)}
+
+              return isAdminMode ? (
+                <Fragment key={asset.assetId}>
+                  {activeDropPosition === "before" ? (
+                    <AssetInsertionDropZone
+                      assetId={asset.assetId}
+                      position="before"
+                      onDragOver={onAssetInsertionDragOver}
+                      onDrop={onAssetDrop}
+                    />
+                  ) : null}
+                  <AdminPhotoCard
+                    asset={asset}
+                    canOrganizeAssets={canOrganizeAssets}
+                    effectiveCoverAssetId={effectiveCoverAssetId}
+                    isDragging={draggingAssetId === asset.assetId}
+                    isBusy={isBusy}
+                    isPriority={assetIndex !== -1 && assetIndex < 6}
+                    isSelected={selectedAssetIds.has(asset.assetId)}
+                    onAssetDragEnd={onAssetDragEnd}
+                    onAssetDragOver={onAssetDragOver}
+                    onAssetDragStart={onAssetDragStart}
+                    onAssetDrop={onAssetDrop}
+                    onAssetSelectionChange={onAssetSelectionChange}
+                    onSetShootCover={onSetShootCover}
+                  />
+                  {activeDropPosition === "after" ? (
+                    <AssetInsertionDropZone
+                      assetId={asset.assetId}
+                      position="after"
+                      onDragOver={onAssetInsertionDragOver}
+                      onDrop={onAssetDrop}
+                    />
+                  ) : null}
+                </Fragment>
+              ) : (
+                <button
+                  type="button"
+                  key={asset.assetId}
+                  className={cn(
+                    "group relative block w-full overflow-hidden bg-muted text-left",
+                    getAssetFrameClass(asset)
+                  )}
+                  onClick={() => {
+                    preloadViewerAssetsAround(visualAssets, asset.assetId)
+                    onOpenAsset(asset.assetId)
+                  }}
+                  onFocus={() =>
+                    preloadViewerAssetsAround(visualAssets, asset.assetId)
+                  }
+                  onPointerDown={() =>
+                    preloadViewerAssetsAround(visualAssets, asset.assetId)
+                  }
+                  onPointerEnter={() =>
+                    preloadViewerAssetsAround(visualAssets, asset.assetId)
+                  }
+                >
+                  <ProgressiveImage
+                    src={asset.thumbnailUrl}
+                    srcSet={asset.thumbnailSrcSet}
+                    sizes={MASONRY_IMAGE_SIZES}
+                    alt={asset.displayName}
+                    className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.035]"
+                    {...getImageLoadingProps(
+                      assetIndex !== -1 && assetIndex < 6
+                    )}
+                  />
+                  <span className="sr-only">Open {asset.displayName}</span>
+                </button>
+              )
+            })}
+            {isAdminMode && canOrganizeAssets ? (
+              <ColumnEndDropZone
+                columnIndex={columnIndex}
+                isActive={
+                  dropTarget?.type === "column-end" &&
+                  dropTarget.columnIndex === columnIndex
+                }
+                isDragging={Boolean(draggingAssetId)}
+                onDragOver={onColumnDragOver}
+                onDrop={onColumnDrop}
               />
-              <span className="sr-only">Open {asset.displayName}</span>
-            </button>
-          )
-        )}
+            ) : null}
+          </div>
+        ))}
       </div>
     </section>
+  )
+}
+
+function AssetInsertionDropZone({
+  assetId,
+  position,
+  onDragOver,
+  onDrop,
+}: {
+  assetId: string
+  position: AssetDropPosition
+  onDragOver: (
+    event: DragEvent<HTMLElement>,
+    assetId: string,
+    position: AssetDropPosition
+  ) => void
+  onDrop: (event: DragEvent<HTMLElement>, assetId: string) => void
+}) {
+  return (
+    <div
+      className="min-h-12 border border-dashed border-brand bg-brand/10 transition"
+      onDragOver={(event) => onDragOver(event, assetId, position)}
+      onDrop={(event) => onDrop(event, assetId)}
+    >
+      <span className="sr-only">Drop {position} selected photo</span>
+    </div>
+  )
+}
+
+function ColumnEndDropZone({
+  columnIndex,
+  isActive,
+  isDragging,
+  onDragOver,
+  onDrop,
+}: {
+  columnIndex: number
+  isActive: boolean
+  isDragging: boolean
+  onDragOver: (event: DragEvent<HTMLElement>, columnIndex: number) => void
+  onDrop: (event: DragEvent<HTMLElement>, columnIndex: number) => void
+}) {
+  return (
+    <div
+      className={cn(
+        "min-h-12 border border-dashed border-transparent transition",
+        isDragging
+          ? "border-foreground/20 bg-muted/35 opacity-100"
+          : "pointer-events-none opacity-0",
+        isActive ? "border-brand bg-brand/10" : ""
+      )}
+      onDragOver={(event) => onDragOver(event, columnIndex)}
+      onDrop={(event) => onDrop(event, columnIndex)}
+    >
+      <span className="sr-only">Drop at end of column {columnIndex + 1}</span>
+    </div>
   )
 }
 
@@ -1331,7 +1635,6 @@ function PhotoViewer({
 function AdminPhotoCard({
   asset,
   canOrganizeAssets,
-  dropPosition,
   effectiveCoverAssetId,
   isDragging,
   isBusy,
@@ -1346,7 +1649,6 @@ function AdminPhotoCard({
 }: {
   asset: CloudinaryAsset
   canOrganizeAssets: boolean
-  dropPosition: AssetDropPosition | null
   effectiveCoverAssetId: string | undefined
   isDragging: boolean
   isBusy: boolean
@@ -1365,11 +1667,10 @@ function AdminPhotoCard({
     <article
       draggable={canOrganizeAssets && !isBusy}
       className={cn(
-        "group/photo relative mb-5 break-inside-avoid overflow-hidden border bg-card transition duration-200",
+        "group/photo relative overflow-hidden border bg-card transition duration-200",
         canOrganizeAssets && !isBusy
           ? "cursor-grab active:cursor-grabbing"
           : "",
-        dropPosition ? "ring-2 ring-brand/70" : "",
         isDragging ? "opacity-45 ring-2 ring-brand/50" : "",
         isSelected ? "ring-2 ring-brand/70" : "hover:border-foreground/40"
       )}
@@ -1378,16 +1679,6 @@ function AdminPhotoCard({
       onDrop={(event) => onAssetDrop(event, asset.assetId)}
       onDragEnd={onAssetDragEnd}
     >
-      {dropPosition ? (
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-x-0 z-30 flex justify-center",
-            dropPosition === "before" ? "top-0" : "bottom-0"
-          )}
-        >
-          <div className="h-1 w-[calc(100%-1rem)] bg-brand shadow-[0_0_0_1px_hsl(var(--background)),0_0_18px_hsl(var(--brand)/0.6)]" />
-        </div>
-      ) : null}
       <div className="relative overflow-hidden bg-muted">
         <button
           type="button"
@@ -1702,49 +1993,261 @@ function getAssetDropPosition(
   return event.clientY < midpoint ? "before" : "after"
 }
 
-function moveAssetToDropTarget(
-  assets: CloudinaryAsset[],
-  draggedAssetId: string,
-  targetAssetId: string,
-  dropPosition: AssetDropPosition
-) {
-  const fromIndex = assets.findIndex(
-    (asset) => asset.assetId === draggedAssetId
-  )
-  const toIndex = assets.findIndex((asset) => asset.assetId === targetAssetId)
-
-  if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
-    return null
-  }
-
-  const nextAssets = assets.slice()
-  const [draggedAsset] = nextAssets.splice(fromIndex, 1)
+function moveAssetToDropTarget({
+  assets,
+  columnCount,
+  draggedAssetId,
+  dropPosition,
+  targetAssetId,
+}: AssetDropMove) {
+  const columns = buildMasonryColumns(assets, columnCount)
+  const draggedAsset = removeAssetFromMasonryColumns(columns, draggedAssetId)
 
   if (!draggedAsset) {
     return null
   }
 
-  const nextIndex = nextAssets.findIndex(
+  const targetColumn = columns.find((column) =>
+    column.some((asset) => asset.assetId === targetAssetId)
+  )
+
+  if (!targetColumn) {
+    return null
+  }
+
+  const targetIndex = targetColumn.findIndex(
     (asset) => asset.assetId === targetAssetId
   )
 
-  if (nextIndex === -1) {
+  if (targetIndex === -1) {
     return null
   }
 
-  const insertIndex = dropPosition === "after" ? nextIndex + 1 : nextIndex
+  const insertIndex = dropPosition === "after" ? targetIndex + 1 : targetIndex
+  targetColumn.splice(insertIndex, 0, draggedAsset)
 
-  nextAssets.splice(insertIndex, 0, draggedAsset)
+  return getChangedFlattenedMasonryAssets(assets, columns, columnCount)
+}
 
-  const didChange = nextAssets.some(
-    (asset, index) => asset.assetId !== assets[index]?.assetId
+function moveAssetToColumnEnd(
+  assets: CloudinaryAsset[],
+  draggedAssetId: string,
+  columnIndex: number,
+  columnCount: number
+) {
+  const columns = buildMasonryColumns(assets, columnCount)
+  const draggedAsset = removeAssetFromMasonryColumns(columns, draggedAssetId)
+  const targetColumn = columns[columnIndex]
+
+  if (!draggedAsset || !targetColumn) {
+    return null
+  }
+
+  targetColumn.push(draggedAsset)
+
+  return getChangedFlattenedMasonryAssets(assets, columns, columnCount)
+}
+
+function buildMasonryColumns(assets: CloudinaryAsset[], columnCount: number) {
+  const resolvedColumnCount = getMasonryColumnCount(columnCount)
+  const savedColumns = getSavedMasonryColumns(assets, resolvedColumnCount)
+
+  if (savedColumns) {
+    return savedColumns
+  }
+
+  return buildDefaultMasonryColumns(assets, resolvedColumnCount)
+}
+
+function getSavedMasonryColumns(
+  assets: CloudinaryAsset[],
+  columnCount: number
+) {
+  const columns = createEmptyMasonryColumns(columnCount)
+  const assetIndexesById = new Map(
+    assets.map((asset, index) => [asset.assetId, index] as const)
   )
 
-  if (!didChange) {
-    return null
+  for (const asset of assets) {
+    if (!hasMasonryLayout(asset, columnCount)) {
+      return null
+    }
+
+    const column = columns[asset.layoutColumn]
+
+    if (!column) {
+      return null
+    }
+
+    column.push(asset)
   }
 
-  return nextAssets
+  columns.forEach((column) => {
+    column.sort((first, second) => {
+      const layoutDifference =
+        (first.layoutOrder ?? 0) - (second.layoutOrder ?? 0)
+
+      if (layoutDifference !== 0) {
+        return layoutDifference
+      }
+
+      return (
+        (assetIndexesById.get(first.assetId) ?? 0) -
+        (assetIndexesById.get(second.assetId) ?? 0)
+      )
+    })
+  })
+
+  return columns
+}
+
+function buildDefaultMasonryColumns(
+  assets: CloudinaryAsset[],
+  columnCount: number
+) {
+  const columns = createEmptyMasonryColumns(columnCount)
+
+  assets.forEach((asset, index) => {
+    const column = columns[index % columnCount]
+
+    if (column) {
+      column.push(asset)
+    }
+  })
+
+  return columns
+}
+
+function createEmptyMasonryColumns(columnCount: number) {
+  const columns = Array.from(
+    { length: columnCount },
+    () => [] as CloudinaryAsset[]
+  )
+
+  return columns
+}
+
+function hasMasonryLayout(
+  asset: CloudinaryAsset,
+  columnCount: number
+): asset is CloudinaryAsset & {
+  layoutColumn: number
+  layoutOrder: number
+  layoutColumnCount: number
+} {
+  const { layoutColumn, layoutColumnCount, layoutOrder } = asset
+
+  return (
+    layoutColumnCount === columnCount &&
+    typeof layoutColumn === "number" &&
+    Number.isInteger(layoutColumn) &&
+    layoutColumn >= 0 &&
+    layoutColumn < columnCount &&
+    typeof layoutOrder === "number" &&
+    Number.isInteger(layoutOrder) &&
+    layoutOrder >= 0
+  )
+}
+
+function getAssetLayoutOrder(assets: CloudinaryAsset[], columnCount: number) {
+  const resolvedColumnCount = getMasonryColumnCount(columnCount)
+
+  return assets.map((asset, index) => {
+    if (hasMasonryLayout(asset, resolvedColumnCount)) {
+      return {
+        assetId: asset.assetId,
+        layoutColumn: asset.layoutColumn,
+        layoutOrder: asset.layoutOrder,
+        layoutColumnCount: resolvedColumnCount,
+      }
+    }
+
+    return {
+      assetId: asset.assetId,
+      layoutColumn: index % resolvedColumnCount,
+      layoutOrder: Math.floor(index / resolvedColumnCount),
+      layoutColumnCount: resolvedColumnCount,
+    }
+  })
+}
+
+function flattenMasonryColumns(columns: CloudinaryAsset[][]) {
+  const rowCount = Math.max(0, ...columns.map((column) => column.length))
+  const assets: CloudinaryAsset[] = []
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    columns.forEach((column) => {
+      const asset = column[rowIndex]
+
+      if (asset) {
+        assets.push(asset)
+      }
+    })
+  }
+
+  return assets
+}
+
+function removeAssetFromMasonryColumns(
+  columns: CloudinaryAsset[][],
+  assetId: string
+) {
+  for (const column of columns) {
+    const assetIndex = column.findIndex((asset) => asset.assetId === assetId)
+
+    if (assetIndex !== -1) {
+      const [asset] = column.splice(assetIndex, 1)
+
+      return asset || null
+    }
+  }
+
+  return null
+}
+
+function getChangedFlattenedMasonryAssets(
+  previousAssets: CloudinaryAsset[],
+  columns: CloudinaryAsset[][],
+  columnCount: number
+) {
+  const resolvedColumnCount = getMasonryColumnCount(columnCount)
+  const nextAssets = flattenMasonryColumns(
+    columns.map((column, columnIndex) =>
+      column.map((asset, layoutOrder) => ({
+        ...asset,
+        layoutColumn: columnIndex,
+        layoutOrder,
+        layoutColumnCount: resolvedColumnCount,
+      }))
+    )
+  )
+  const previousAssetsById = new Map(
+    previousAssets.map((asset) => [asset.assetId, asset] as const)
+  )
+  const didChange = nextAssets.some((asset, index) => {
+    const previousAsset = previousAssetsById.get(asset.assetId)
+
+    return (
+      asset.assetId !== previousAssets[index]?.assetId ||
+      asset.layoutColumn !== previousAsset?.layoutColumn ||
+      asset.layoutOrder !== previousAsset?.layoutOrder ||
+      asset.layoutColumnCount !== previousAsset?.layoutColumnCount
+    )
+  })
+
+  return didChange ? nextAssets : null
+}
+
+function getMasonryColumnCount(columnCount: number) {
+  if (columnCount >= 4) {
+    return 4
+  }
+
+  if (columnCount >= 2) {
+    return 2
+  }
+
+  return 1
 }
 
 function getErrorMessage(error: unknown) {

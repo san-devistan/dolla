@@ -102,6 +102,16 @@ type CloudinaryAsset = {
   createdAt?: string
   context: Record<string, string>
   orderRank?: number
+  layoutColumn?: number
+  layoutOrder?: number
+  layoutColumnCount?: number
+}
+
+type CloudinaryAssetLayout = {
+  assetId: string
+  layoutColumn: number
+  layoutOrder: number
+  layoutColumnCount: number
 }
 
 type AboutContentBlock = {
@@ -221,6 +231,9 @@ type ConvexAssetView = {
   createdAt: string | null
   context: Record<string, string>
   orderRank: number
+  layoutColumn: number | null
+  layoutOrder: number | null
+  layoutColumnCount: number | null
 }
 
 type ConvexCategorySummaryView = {
@@ -1014,6 +1027,9 @@ function mapConvexAsset(asset: ConvexAssetView): CloudinaryAsset {
     createdAt: asset.createdAt || undefined,
     context: asset.context,
     orderRank: asset.orderRank,
+    layoutColumn: asset.layoutColumn ?? undefined,
+    layoutOrder: asset.layoutOrder ?? undefined,
+    layoutColumnCount: asset.layoutColumnCount ?? undefined,
   }
 }
 
@@ -1143,6 +1159,24 @@ async function readSyncedHome({
     categories: home.categories.map(mapConvexCategorySummary),
     heroAssets: home.heroAssets.map(mapConvexAsset),
     latestAssets: home.latestAssets.map(mapConvexAsset),
+  }
+}
+
+async function readConvexCategoryNavigation(): Promise<
+  CloudinaryHome["categories"]
+> {
+  const client = getConvexMediaClient()
+
+  if (!client) {
+    return []
+  }
+
+  try {
+    const home = await client.query(api.media.getHome, {})
+
+    return home.categories.map(mapConvexCategorySummary)
+  } catch {
+    return []
   }
 }
 
@@ -1842,13 +1876,16 @@ async function getCloudinaryHome(
 
 async function getCloudinaryAbout(): Promise<CloudinaryAbout> {
   const connectionState = getCloudinaryConfigState()
-  const content = await readAboutContent()
+  const [categories, content] = await Promise.all([
+    readConvexCategoryNavigation(),
+    readAboutContent(),
+  ])
 
   if (!connectionState.configured) {
     return {
       connection: connectionState,
       rootFolder: CLOUDINARY_ROOT_FOLDER,
-      categories: [],
+      categories,
       content,
     } satisfies CloudinaryAbout
   }
@@ -1856,19 +1893,16 @@ async function getCloudinaryAbout(): Promise<CloudinaryAbout> {
   try {
     configureCloudinary()
 
-    const [folders, rootAssets] = await Promise.all([
-      searchDollaFolders(),
-      searchAssetsInFolders({
-        folderPaths: [CLOUDINARY_ROOT_FOLDER],
-        imageOnly: true,
-        maxResults: 1,
-      }),
-    ])
+    const rootAssets = await searchAssetsInFolders({
+      folderPaths: [CLOUDINARY_ROOT_FOLDER],
+      imageOnly: true,
+      maxResults: 1,
+    })
 
     return {
       connection: connectionState,
       rootFolder: CLOUDINARY_ROOT_FOLDER,
-      categories: getCategoryNavigationItems(folders),
+      categories,
       image: rootAssets[0],
       content,
     } satisfies CloudinaryAbout
@@ -1879,7 +1913,7 @@ async function getCloudinaryAbout(): Promise<CloudinaryAbout> {
         error: getCloudinaryErrorMessage(error),
       },
       rootFolder: CLOUDINARY_ROOT_FOLDER,
-      categories: [],
+      categories,
       content,
     } satisfies CloudinaryAbout
   }
@@ -1887,54 +1921,17 @@ async function getCloudinaryAbout(): Promise<CloudinaryAbout> {
 
 async function getCloudinaryPricing(): Promise<CloudinaryPricing> {
   const connectionState = getCloudinaryConfigState()
-  const items = await readPricingItems()
+  const [categories, items] = await Promise.all([
+    readConvexCategoryNavigation(),
+    readPricingItems(),
+  ])
 
-  if (!connectionState.configured) {
-    return {
-      connection: connectionState,
-      rootFolder: CLOUDINARY_ROOT_FOLDER,
-      categories: [],
-      items,
-    } satisfies CloudinaryPricing
-  }
-
-  try {
-    configureCloudinary()
-
-    const folders = await searchDollaFolders()
-
-    return {
-      connection: connectionState,
-      rootFolder: CLOUDINARY_ROOT_FOLDER,
-      categories: getCategoryNavigationItems(folders),
-      items,
-    } satisfies CloudinaryPricing
-  } catch (error) {
-    return {
-      connection: {
-        ...connectionState,
-        error: getCloudinaryErrorMessage(error),
-      },
-      rootFolder: CLOUDINARY_ROOT_FOLDER,
-      categories: [],
-      items,
-    } satisfies CloudinaryPricing
-  }
-}
-
-function getCategoryNavigationItems(
-  folders: CloudinaryFolder[]
-): CloudinaryHome["categories"] {
-  return folders
-    .filter((folder) => folder.kind === "category")
-    .map((folder) => ({
-      name: folder.name,
-      path: folder.path,
-      orderRank: folder.orderRank,
-      shootCount: folders.filter(
-        (candidate) => candidate.parentPath === folder.path
-      ).length,
-    }))
+  return {
+    connection: connectionState,
+    rootFolder: CLOUDINARY_ROOT_FOLDER,
+    categories,
+    items,
+  } satisfies CloudinaryPricing
 }
 
 function getCategorySummaries(
@@ -2472,11 +2469,13 @@ async function reorderCloudinaryAssets({
 }: {
   shootPath: string
   assetIds: string[]
+  assetLayouts?: CloudinaryAssetLayout[]
 }) {
   const client = getRequiredConvexMediaClient()
+  const normalizedShootPath = normalizeDollaFolderPath(shootPath)
 
   await client.mutation(api.media.reorderAssets, {
-    shootPath: normalizeDollaFolderPath(shootPath),
+    shootPath: normalizedShootPath,
     assetIds,
   })
 

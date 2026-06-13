@@ -9,15 +9,11 @@ import {
   getImageLoadingProps,
 } from "@/features/cloudinary/image-delivery"
 import { ProgressiveImage } from "@/features/cloudinary/progressive-image"
+import { getMediaCategoryRoute } from "@/lib/admin-routes"
 import type {
   CloudinaryConnection,
   CloudinaryHome,
 } from "@/lib/cloudinary.server"
-import {
-  getMediaAdminSearch,
-  isMediaAdminMode,
-  validateMediaAdminSearch,
-} from "@/lib/media-admin-mode"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
@@ -53,15 +49,23 @@ type CategoryDropTarget = {
 }
 
 export const Route = createFileRoute("/")({
-  validateSearch: validateMediaAdminSearch,
   loader: () => getCloudinaryHomeFn({ data: {} }),
-  component: DollaHomePage,
+  component: PublicDollaHomePage,
 })
 
-function DollaHomePage() {
+function PublicDollaHomePage() {
   const initialHome = Route.useLoaderData()
-  const search = Route.useSearch()
-  const isAdminMode = isMediaAdminMode(search)
+
+  return <DollaHomePage initialHome={initialHome} isAdminMode={false} />
+}
+
+function DollaHomePage({
+  initialHome,
+  isAdminMode,
+}: {
+  initialHome: CloudinaryHome
+  isAdminMode: boolean
+}) {
   const [home, setHome] = useState(initialHome)
   const [newCategoryName, setNewCategoryName] = useState("")
   const [isCreateCategoryDialogOpen, setIsCreateCategoryDialogOpen] =
@@ -305,13 +309,18 @@ function DollaHomePage() {
   }
 
   return (
-    <main className="min-h-svh bg-background text-foreground">
+    <main className="flex min-h-[90svh] flex-col bg-background text-foreground">
       <GalleryHeader categories={home.categories} isAdminMode={isAdminMode} />
-      <section className="mx-auto w-full max-w-[1540px] px-4 pb-16 sm:px-6 lg:px-8">
+      <section
+        className={cn(
+          "mx-auto flex w-full max-w-[1540px] flex-col px-4 sm:px-6 lg:px-8",
+          isAdminMode ? "pb-16" : "pt-2 pb-6 md:pt-0 md:pb-10"
+        )}
+      >
         {isAdminMode ? <ConnectionNotice connection={home.connection} /> : null}
-        <div className="mt-5 mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mt-2 mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mt-3 md:mb-7">
           <div>
-            <h1 className="font-heading text-5xl leading-none tracking-normal md:text-6xl">
+            <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
               Categories
             </h1>
           </div>
@@ -357,6 +366,8 @@ function DollaHomePage() {
     </main>
   )
 }
+
+export { DollaHomePage }
 
 function CategoryGrid({
   canOrganizeCategories,
@@ -499,9 +510,8 @@ function CategoryCard({
         </div>
       ) : null}
       <Link
-        to="/$category"
+        to={getMediaCategoryRoute(isAdminMode)}
         params={{ category: toMediaRouteSegment(category.name) }}
-        search={getMediaAdminSearch(isAdminMode)}
         className="block w-full text-left ring-offset-background transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="relative aspect-[3/4]">
@@ -518,10 +528,10 @@ function CategoryCard({
             <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:42px_42px]" />
           )}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-3 py-2.5 text-white">
-            <h2 className="font-sans text-sm leading-tight font-semibold tracking-[0.12em] uppercase">
+            <h2 className="font-sans text-xs leading-tight font-semibold tracking-[0.12em] uppercase sm:text-sm">
               {category.name}
             </h2>
-            <p className="mt-0.5 text-[0.6875rem] leading-tight font-medium tracking-[0.12em] text-white/70 uppercase">
+            <p className="mt-0.5 text-[0.625rem] leading-tight font-medium tracking-[0.12em] text-white/70 uppercase sm:text-[0.6875rem]">
               {category.shootCount} shoots
             </p>
           </div>

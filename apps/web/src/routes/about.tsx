@@ -18,14 +18,11 @@ import type {
   CloudinaryAsset,
   CloudinaryConnection,
 } from "@/lib/cloudinary.server"
-import {
-  isMediaAdminMode,
-  validateMediaAdminSearch,
-} from "@/lib/media-admin-mode"
 import { createFileRoute } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@workspace/ui/components/button"
 import { toast } from "@workspace/ui/components/sonner"
+import { cn } from "@workspace/ui/lib/utils"
 import {
   AlertTriangleIcon,
   BoldIcon,
@@ -35,7 +32,6 @@ import {
 import { type FormEvent, useEffect, useRef, useState } from "react"
 
 export const Route = createFileRoute("/about")({
-  validateSearch: validateMediaAdminSearch,
   loader: () => getCloudinaryAboutFn(),
   head: () => ({
     meta: [
@@ -44,13 +40,22 @@ export const Route = createFileRoute("/about")({
       },
     ],
   }),
-  component: AboutPage,
+  component: PublicAboutPage,
 })
 
-function AboutPage() {
+function PublicAboutPage() {
   const initialAbout = Route.useLoaderData()
-  const search = Route.useSearch()
-  const isAdminMode = isMediaAdminMode(search)
+
+  return <AboutPage initialAbout={initialAbout} isAdminMode={false} />
+}
+
+function AboutPage({
+  initialAbout,
+  isAdminMode,
+}: {
+  initialAbout: CloudinaryAbout
+  isAdminMode: boolean
+}) {
   const [about, setAbout] = useState<CloudinaryAbout>(initialAbout)
   const [draftText, setDraftText] = useState(() =>
     serializeAboutBlocks(initialAbout.content)
@@ -92,9 +97,16 @@ function AboutPage() {
   }
 
   return (
-    <main className="min-h-svh bg-background text-foreground">
+    <main className="flex min-h-[90svh] flex-col bg-background text-foreground">
       <GalleryHeader categories={about.categories} isAdminMode={isAdminMode} />
-      <section className="mx-auto flex w-full max-w-[1540px] flex-col items-start gap-6 px-4 pt-2 pb-8 md:flex-row md:gap-8 md:px-8 md:pt-6">
+      <section
+        className={cn(
+          "mx-auto flex w-full max-w-[1540px] flex-col gap-6 px-4 md:flex-row md:gap-8 md:px-8",
+          isAdminMode
+            ? "items-start pt-2 pb-8 md:pt-6"
+            : "flex-1 items-center py-10"
+        )}
+      >
         <AboutImage
           connection={about.connection}
           image={about.image}
@@ -114,6 +126,8 @@ function AboutPage() {
     </main>
   )
 }
+
+export { AboutPage }
 
 function AboutImage({
   connection,

@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as contact from "../contact.js";
+import type * as http from "../http.js";
 import type * as media from "../media.js";
 
 import type {
@@ -17,6 +19,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  contact: typeof contact;
+  http: typeof http;
   media: typeof media;
 }>;
 
@@ -46,4 +50,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
+};

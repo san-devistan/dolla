@@ -10,16 +10,31 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as CategoryRouteImport } from './routes/$category'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminPricingRouteImport } from './routes/admin/pricing'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
+import { Route as AdminLogoutRouteImport } from './routes/admin/logout'
+import { Route as AdminLoginRouteImport } from './routes/admin/login'
+import { Route as AdminContactRouteImport } from './routes/admin/contact'
+import { Route as AdminAboutRouteImport } from './routes/admin/about'
+import { Route as AdminCategoryRouteImport } from './routes/admin/$category'
 import { Route as CategoryShootRouteImport } from './routes/$category/$shoot'
 import { Route as ApiCloudinaryUploadRouteImport } from './routes/api/cloudinary/upload'
+import { Route as AdminMediaCategoryRouteImport } from './routes/admin/media/$category'
+import { Route as AdminCategoryShootRouteImport } from './routes/admin/$category/$shoot'
+import { Route as AdminMediaCategoryShootRouteImport } from './routes/admin/media/$category/$shoot'
 
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
@@ -37,9 +52,39 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPricingRoute = AdminPricingRouteImport.update({
+  id: '/admin/pricing',
+  path: '/admin/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminMediaRoute = AdminMediaRouteImport.update({
   id: '/admin/media',
   path: '/admin/media',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLogoutRoute = AdminLogoutRouteImport.update({
+  id: '/admin/logout',
+  path: '/admin/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/admin/login',
+  path: '/admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminContactRoute = AdminContactRouteImport.update({
+  id: '/admin/contact',
+  path: '/admin/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAboutRoute = AdminAboutRouteImport.update({
+  id: '/admin/about',
+  path: '/admin/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCategoryRoute = AdminCategoryRouteImport.update({
+  id: '/admin/$category',
+  path: '/admin/$category',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoryShootRoute = CategoryShootRouteImport.update({
@@ -52,34 +97,79 @@ const ApiCloudinaryUploadRoute = ApiCloudinaryUploadRouteImport.update({
   path: '/api/cloudinary/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminMediaCategoryRoute = AdminMediaCategoryRouteImport.update({
+  id: '/$category',
+  path: '/$category',
+  getParentRoute: () => AdminMediaRoute,
+} as any)
+const AdminCategoryShootRoute = AdminCategoryShootRouteImport.update({
+  id: '/$shoot',
+  path: '/$shoot',
+  getParentRoute: () => AdminCategoryRoute,
+} as any)
+const AdminMediaCategoryShootRoute = AdminMediaCategoryShootRouteImport.update({
+  id: '/$shoot',
+  path: '/$shoot',
+  getParentRoute: () => AdminMediaCategoryRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$category': typeof CategoryRouteWithChildren
   '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
   '/pricing': typeof PricingRoute
   '/$category/$shoot': typeof CategoryShootRoute
-  '/admin/media': typeof AdminMediaRoute
+  '/admin/$category': typeof AdminCategoryRouteWithChildren
+  '/admin/about': typeof AdminAboutRoute
+  '/admin/contact': typeof AdminContactRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/logout': typeof AdminLogoutRoute
+  '/admin/media': typeof AdminMediaRouteWithChildren
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/$category/$shoot': typeof AdminCategoryShootRoute
+  '/admin/media/$category': typeof AdminMediaCategoryRouteWithChildren
   '/api/cloudinary/upload': typeof ApiCloudinaryUploadRoute
+  '/admin/media/$category/$shoot': typeof AdminMediaCategoryShootRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$category': typeof CategoryRouteWithChildren
   '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
   '/pricing': typeof PricingRoute
   '/$category/$shoot': typeof CategoryShootRoute
-  '/admin/media': typeof AdminMediaRoute
+  '/admin/$category': typeof AdminCategoryRouteWithChildren
+  '/admin/about': typeof AdminAboutRoute
+  '/admin/contact': typeof AdminContactRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/logout': typeof AdminLogoutRoute
+  '/admin/media': typeof AdminMediaRouteWithChildren
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/$category/$shoot': typeof AdminCategoryShootRoute
+  '/admin/media/$category': typeof AdminMediaCategoryRouteWithChildren
   '/api/cloudinary/upload': typeof ApiCloudinaryUploadRoute
+  '/admin/media/$category/$shoot': typeof AdminMediaCategoryShootRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$category': typeof CategoryRouteWithChildren
   '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
   '/pricing': typeof PricingRoute
   '/$category/$shoot': typeof CategoryShootRoute
-  '/admin/media': typeof AdminMediaRoute
+  '/admin/$category': typeof AdminCategoryRouteWithChildren
+  '/admin/about': typeof AdminAboutRoute
+  '/admin/contact': typeof AdminContactRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/logout': typeof AdminLogoutRoute
+  '/admin/media': typeof AdminMediaRouteWithChildren
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/$category/$shoot': typeof AdminCategoryShootRoute
+  '/admin/media/$category': typeof AdminMediaCategoryRouteWithChildren
   '/api/cloudinary/upload': typeof ApiCloudinaryUploadRoute
+  '/admin/media/$category/$shoot': typeof AdminMediaCategoryShootRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -87,36 +177,73 @@ export interface FileRouteTypes {
     | '/'
     | '/$category'
     | '/about'
+    | '/contact'
     | '/pricing'
     | '/$category/$shoot'
+    | '/admin/$category'
+    | '/admin/about'
+    | '/admin/contact'
+    | '/admin/login'
+    | '/admin/logout'
     | '/admin/media'
+    | '/admin/pricing'
+    | '/admin/$category/$shoot'
+    | '/admin/media/$category'
     | '/api/cloudinary/upload'
+    | '/admin/media/$category/$shoot'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$category'
     | '/about'
+    | '/contact'
     | '/pricing'
     | '/$category/$shoot'
+    | '/admin/$category'
+    | '/admin/about'
+    | '/admin/contact'
+    | '/admin/login'
+    | '/admin/logout'
     | '/admin/media'
+    | '/admin/pricing'
+    | '/admin/$category/$shoot'
+    | '/admin/media/$category'
     | '/api/cloudinary/upload'
+    | '/admin/media/$category/$shoot'
   id:
     | '__root__'
     | '/'
     | '/$category'
     | '/about'
+    | '/contact'
     | '/pricing'
     | '/$category/$shoot'
+    | '/admin/$category'
+    | '/admin/about'
+    | '/admin/contact'
+    | '/admin/login'
+    | '/admin/logout'
     | '/admin/media'
+    | '/admin/pricing'
+    | '/admin/$category/$shoot'
+    | '/admin/media/$category'
     | '/api/cloudinary/upload'
+    | '/admin/media/$category/$shoot'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CategoryRoute: typeof CategoryRouteWithChildren
   AboutRoute: typeof AboutRoute
+  ContactRoute: typeof ContactRoute
   PricingRoute: typeof PricingRoute
-  AdminMediaRoute: typeof AdminMediaRoute
+  AdminCategoryRoute: typeof AdminCategoryRouteWithChildren
+  AdminAboutRoute: typeof AdminAboutRoute
+  AdminContactRoute: typeof AdminContactRoute
+  AdminLoginRoute: typeof AdminLoginRoute
+  AdminLogoutRoute: typeof AdminLogoutRoute
+  AdminMediaRoute: typeof AdminMediaRouteWithChildren
+  AdminPricingRoute: typeof AdminPricingRoute
   ApiCloudinaryUploadRoute: typeof ApiCloudinaryUploadRoute
 }
 
@@ -127,6 +254,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/about': {
@@ -150,11 +284,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/pricing': {
+      id: '/admin/pricing'
+      path: '/admin/pricing'
+      fullPath: '/admin/pricing'
+      preLoaderRoute: typeof AdminPricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/media': {
       id: '/admin/media'
       path: '/admin/media'
       fullPath: '/admin/media'
       preLoaderRoute: typeof AdminMediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/logout': {
+      id: '/admin/logout'
+      path: '/admin/logout'
+      fullPath: '/admin/logout'
+      preLoaderRoute: typeof AdminLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/admin/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/contact': {
+      id: '/admin/contact'
+      path: '/admin/contact'
+      fullPath: '/admin/contact'
+      preLoaderRoute: typeof AdminContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/about': {
+      id: '/admin/about'
+      path: '/admin/about'
+      fullPath: '/admin/about'
+      preLoaderRoute: typeof AdminAboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/$category': {
+      id: '/admin/$category'
+      path: '/admin/$category'
+      fullPath: '/admin/$category'
+      preLoaderRoute: typeof AdminCategoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$category/$shoot': {
@@ -171,6 +347,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCloudinaryUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/media/$category': {
+      id: '/admin/media/$category'
+      path: '/$category'
+      fullPath: '/admin/media/$category'
+      preLoaderRoute: typeof AdminMediaCategoryRouteImport
+      parentRoute: typeof AdminMediaRoute
+    }
+    '/admin/$category/$shoot': {
+      id: '/admin/$category/$shoot'
+      path: '/$shoot'
+      fullPath: '/admin/$category/$shoot'
+      preLoaderRoute: typeof AdminCategoryShootRouteImport
+      parentRoute: typeof AdminCategoryRoute
+    }
+    '/admin/media/$category/$shoot': {
+      id: '/admin/media/$category/$shoot'
+      path: '/$shoot'
+      fullPath: '/admin/media/$category/$shoot'
+      preLoaderRoute: typeof AdminMediaCategoryShootRouteImport
+      parentRoute: typeof AdminMediaCategoryRoute
+    }
   }
 }
 
@@ -186,12 +383,54 @@ const CategoryRouteWithChildren = CategoryRoute._addFileChildren(
   CategoryRouteChildren,
 )
 
+interface AdminCategoryRouteChildren {
+  AdminCategoryShootRoute: typeof AdminCategoryShootRoute
+}
+
+const AdminCategoryRouteChildren: AdminCategoryRouteChildren = {
+  AdminCategoryShootRoute: AdminCategoryShootRoute,
+}
+
+const AdminCategoryRouteWithChildren = AdminCategoryRoute._addFileChildren(
+  AdminCategoryRouteChildren,
+)
+
+interface AdminMediaCategoryRouteChildren {
+  AdminMediaCategoryShootRoute: typeof AdminMediaCategoryShootRoute
+}
+
+const AdminMediaCategoryRouteChildren: AdminMediaCategoryRouteChildren = {
+  AdminMediaCategoryShootRoute: AdminMediaCategoryShootRoute,
+}
+
+const AdminMediaCategoryRouteWithChildren =
+  AdminMediaCategoryRoute._addFileChildren(AdminMediaCategoryRouteChildren)
+
+interface AdminMediaRouteChildren {
+  AdminMediaCategoryRoute: typeof AdminMediaCategoryRouteWithChildren
+}
+
+const AdminMediaRouteChildren: AdminMediaRouteChildren = {
+  AdminMediaCategoryRoute: AdminMediaCategoryRouteWithChildren,
+}
+
+const AdminMediaRouteWithChildren = AdminMediaRoute._addFileChildren(
+  AdminMediaRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CategoryRoute: CategoryRouteWithChildren,
   AboutRoute: AboutRoute,
+  ContactRoute: ContactRoute,
   PricingRoute: PricingRoute,
-  AdminMediaRoute: AdminMediaRoute,
+  AdminCategoryRoute: AdminCategoryRouteWithChildren,
+  AdminAboutRoute: AdminAboutRoute,
+  AdminContactRoute: AdminContactRoute,
+  AdminLoginRoute: AdminLoginRoute,
+  AdminLogoutRoute: AdminLogoutRoute,
+  AdminMediaRoute: AdminMediaRouteWithChildren,
+  AdminPricingRoute: AdminPricingRoute,
   ApiCloudinaryUploadRoute: ApiCloudinaryUploadRoute,
 }
 export const routeTree = rootRouteImport

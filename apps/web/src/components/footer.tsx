@@ -35,7 +35,7 @@ function Footer() {
   const currentYear = new Date().getFullYear()
 
   return (
-    <footer className="flex h-[10vh] w-full items-center justify-between px-4 md:px-8">
+    <footer className="flex h-[10vh] w-full shrink-0 items-center justify-between px-4 md:px-8">
       <section className="flex flex-col items-start font-heading text-sm leading-tight">
         <p className="font-bold lining-nums">
           &copy; {currentYear}, DOLLA SHASHIN

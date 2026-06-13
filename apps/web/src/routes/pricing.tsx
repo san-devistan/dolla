@@ -4,20 +4,16 @@ import {
 } from "@/features/cloudinary/cloudinary.functions"
 import { GalleryHeader } from "@/features/cloudinary/gallery-header"
 import type { CloudinaryPricing, PricingItem } from "@/lib/cloudinary.server"
-import {
-  isMediaAdminMode,
-  validateMediaAdminSearch,
-} from "@/lib/media-admin-mode"
 import { createFileRoute } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { toast } from "@workspace/ui/components/sonner"
+import { cn } from "@workspace/ui/lib/utils"
 import { AlertTriangleIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
 import { type FormEvent, useEffect, useState } from "react"
 
 export const Route = createFileRoute("/pricing")({
-  validateSearch: validateMediaAdminSearch,
   loader: () => getCloudinaryPricingFn(),
   head: () => ({
     meta: [
@@ -26,15 +22,24 @@ export const Route = createFileRoute("/pricing")({
       },
     ],
   }),
-  component: PricingPage,
+  component: PublicPricingPage,
 })
 
 type PricingDraftItem = PricingItem
 
-function PricingPage() {
+function PublicPricingPage() {
   const initialPricing = Route.useLoaderData()
-  const search = Route.useSearch()
-  const isAdminMode = isMediaAdminMode(search)
+
+  return <PricingPage initialPricing={initialPricing} isAdminMode={false} />
+}
+
+function PricingPage({
+  initialPricing,
+  isAdminMode,
+}: {
+  initialPricing: CloudinaryPricing
+  isAdminMode: boolean
+}) {
   const [pricing, setPricing] = useState<CloudinaryPricing>(initialPricing)
   const [draftItems, setDraftItems] = useState(() =>
     getEditablePricingItems(initialPricing.items)
@@ -81,12 +86,17 @@ function PricingPage() {
   }
 
   return (
-    <main className="min-h-svh bg-background text-foreground">
+    <main className="flex min-h-[90svh] flex-col bg-background text-foreground">
       <GalleryHeader
         categories={pricing.categories}
         isAdminMode={isAdminMode}
       />
-      <section className="mx-auto w-full max-w-[980px] px-4 pt-2 pb-14 font-heading md:px-8 md:pt-6">
+      <section
+        className={cn(
+          "mx-auto flex w-full max-w-[980px] flex-col px-4 font-heading md:px-8",
+          isAdminMode ? "pt-2 pb-14 md:pt-6" : "flex-1 justify-center py-10"
+        )}
+      >
         <h1 className="text-xl font-semibold tracking-[0.1em] uppercase md:text-3xl">
           Tarifs
         </h1>
@@ -126,6 +136,8 @@ function PricingPage() {
     </main>
   )
 }
+
+export { PricingPage }
 
 function PricingList({ items }: { items: PricingItem[] }) {
   if (items.length === 0) {

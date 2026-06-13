@@ -12,17 +12,17 @@ import {
   getImageLoadingProps,
 } from "@/features/cloudinary/image-delivery"
 import { ProgressiveImage } from "@/features/cloudinary/progressive-image"
+import {
+  getMediaCategoryRoute,
+  getMediaHomeRoute,
+  getMediaShootRoute,
+} from "@/lib/admin-routes"
 import type {
   CloudinaryCategoryPage,
   CloudinaryConnection,
   CloudinaryFolder,
   CloudinaryShootSummary,
 } from "@/lib/cloudinary.server"
-import {
-  getMediaAdminSearch,
-  isMediaAdminMode,
-  validateMediaAdminSearch,
-} from "@/lib/media-admin-mode"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import {
   createFileRoute,
@@ -86,23 +86,40 @@ type ShootDropTarget = {
 }
 
 export const Route = createFileRoute("/$category")({
-  validateSearch: validateMediaAdminSearch,
   loader: ({ params }) =>
     getCloudinaryCategoryFn({
       data: { categoryName: params.category },
     }),
-  component: CategoryPage,
+  component: PublicCategoryPage,
 })
 
-function CategoryPage() {
+function PublicCategoryPage() {
   const initialCategoryPage = Route.useLoaderData()
   const { category } = Route.useParams()
-  const search = Route.useSearch()
-  const isAdminMode = isMediaAdminMode(search)
+
+  return (
+    <CategoryPage
+      category={category}
+      initialCategoryPage={initialCategoryPage}
+      isAdminMode={false}
+    />
+  )
+}
+
+function CategoryPage({
+  category,
+  initialCategoryPage,
+  isAdminMode,
+}: {
+  category: string
+  initialCategoryPage: CloudinaryCategoryPage
+  isAdminMode: boolean
+}) {
   const navigate = useNavigate()
   const hasShootSegment = useRouterState({
     select: (state) =>
-      state.location.pathname.split("/").filter(Boolean).length > 1,
+      state.location.pathname.split("/").filter(Boolean).length >
+      (isAdminMode ? 2 : 1),
   })
   const [categoryPage, setCategoryPage] = useState(initialCategoryPage)
   const [createShootName, setCreateShootName] = useState("")
@@ -222,12 +239,11 @@ function CategoryPage() {
         setIsCreateShootDialogOpen(false)
 
         void navigate({
-          to: "/$category/$shoot",
+          to: getMediaShootRoute(isAdminMode),
           params: {
             category: toMediaRouteSegment(selectedCategory.name),
             shoot: toMediaRouteSegment(nextShootName),
           },
-          search: getMediaAdminSearch(true),
         })
 
         return undefined
@@ -295,9 +311,8 @@ function CategoryPage() {
         setIsRenamingCategory(false)
 
         void navigate({
-          to: "/$category",
+          to: getMediaCategoryRoute(isAdminMode),
           params: { category: toMediaRouteSegment(nextName) },
-          search: getMediaAdminSearch(true),
         })
 
         return undefined
@@ -330,7 +345,7 @@ function CategoryPage() {
       return await getCategory({ data: { categoryName: category } })
     }, "Category deleted").then((didSucceed) => {
       if (didSucceed) {
-        void navigate({ to: "/", search: getMediaAdminSearch(true) })
+        void navigate({ to: getMediaHomeRoute(isAdminMode) })
       }
 
       return undefined
@@ -548,14 +563,16 @@ function CategoryPage() {
   }
 
   return (
-    <main className="min-h-svh bg-background text-foreground">
+    <main className="flex min-h-[90svh] flex-col bg-background text-foreground">
       <GalleryHeader
         categories={categoryPage.categories}
         activeCategoryPath={categoryPage.category?.path}
         isAdminMode={isAdminMode}
       />
       {hasShootSegment ? (
-        <Outlet />
+        <div className="flex flex-1 flex-col">
+          <Outlet />
+        </div>
       ) : selectedCategory ? (
         <CategoryShootSurface
           canCreateShoot={canCreateShoot}
@@ -599,6 +616,8 @@ function CategoryPage() {
     </main>
   )
 }
+
+export { CategoryPage }
 
 function CategoryShootSurface({
   canCreateShoot,
@@ -682,9 +701,14 @@ function CategoryShootSurface({
   }, [isRenamingCategory])
 
   return (
-    <section className="mx-auto w-full max-w-[1540px] px-4 pb-16 sm:px-6 lg:px-8">
+    <section
+      className={cn(
+        "mx-auto flex w-full max-w-[1540px] flex-col px-4 sm:px-6 lg:px-8",
+        isAdminMode ? "pb-16" : "pt-2 pb-6 md:pt-0 md:pb-10"
+      )}
+    >
       {isAdminMode ? <ConnectionNotice connection={connection} /> : null}
-      <div className="mt-5 mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mt-2 mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mt-3 md:mb-7">
         <div className="min-w-0">
           {isRenamingCategory ? (
             <form
@@ -695,7 +719,7 @@ function CategoryShootSurface({
                 ref={renameInputRef}
                 aria-label="Category folder name"
                 value={renameName}
-                className="h-auto border-x-0 border-t-0 py-0 font-heading text-5xl leading-none tracking-normal md:text-6xl"
+                className="h-auto border-x-0 border-t-0 py-0 font-heading text-4xl leading-none tracking-normal md:text-6xl"
                 disabled={!canRenameCategory || isBusy}
                 onChange={(event) => onRenameNameChange(event.target.value)}
               />
@@ -721,7 +745,7 @@ function CategoryShootSurface({
               </Button>
             </form>
           ) : (
-            <h1 className="font-heading text-5xl leading-none tracking-normal md:text-6xl">
+            <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
               {category.name}
             </h1>
           )}
@@ -1037,12 +1061,11 @@ function ShootCard({
         </div>
       ) : null}
       <Link
-        to="/$category/$shoot"
+        to={getMediaShootRoute(isAdminMode)}
         params={{
           category: toMediaRouteSegment(shoot.categoryName),
           shoot: toMediaRouteSegment(shoot.name),
         }}
-        search={getMediaAdminSearch(isAdminMode)}
         className="block w-full text-left ring-offset-background transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="relative aspect-[3/4]">
@@ -1059,10 +1082,10 @@ function ShootCard({
             <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:42px_42px]" />
           )}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-3 py-2.5 text-white">
-            <h2 className="font-sans text-sm leading-tight font-semibold tracking-[0.12em] uppercase">
+            <h2 className="font-sans text-xs leading-tight font-semibold tracking-[0.12em] uppercase sm:text-sm">
               {shoot.name}
             </h2>
-            <p className="mt-0.5 text-[0.6875rem] leading-tight font-medium tracking-[0.12em] text-white/70 uppercase">
+            <p className="mt-0.5 text-[0.625rem] leading-tight font-medium tracking-[0.12em] text-white/70 uppercase sm:text-[0.6875rem]">
               {shoot.assetCount} photos
             </p>
           </div>

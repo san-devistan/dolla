@@ -15,6 +15,7 @@ const MAX_ASSETS = 800
 const MAX_SHOOT_CREDITS_LENGTH = 2000
 const MAX_SITE_CONTENT_BLOCKS = 40
 const MAX_SITE_CONTENT_TEXT_LENGTH = 12_000
+const MAX_MASONRY_COLUMNS = 4
 
 const nullableString = v.union(v.string(), v.null())
 const nullableNumber = v.union(v.number(), v.null())
@@ -63,6 +64,13 @@ const syncAssetValidator = v.object({
   context: v.record(v.string(), v.string()),
 })
 
+const reorderAssetLayoutValidator = v.object({
+  assetId: v.string(),
+  layoutColumn: v.number(),
+  layoutOrder: v.number(),
+  layoutColumnCount: v.number(),
+})
+
 const siteContentBlockValidator = v.object({
   id: v.string(),
   kind: v.union(v.literal("paragraph"), v.literal("heading")),
@@ -72,6 +80,13 @@ const siteContentBlockValidator = v.object({
 
 type SyncFolder = Infer<typeof syncFolderValidator>
 type SyncAsset = Infer<typeof syncAssetValidator>
+type ReorderAssetLayout = Infer<typeof reorderAssetLayoutValidator>
+type OrderedAssetPatch = {
+  assetId: string
+  layoutColumn?: number
+  layoutOrder?: number
+  layoutColumnCount?: number
+}
 type SystemFields<TableName extends string> = {
   _id: GenericId<TableName>
   _creationTime: number
@@ -125,6 +140,9 @@ type MediaAsset = SystemFields<"mediaAssets"> & {
   createdAt: string | null
   context: Record<string, string>
   orderRank: number
+  layoutColumn?: number
+  layoutOrder?: number
+  layoutColumnCount?: number
   syncedAt: number
   deletedAt: number | null
 }
@@ -355,7 +373,8 @@ export const reorderShoots = mutation({
 export const reorderAssets = mutation({
   args: {
     shootPath: v.string(),
-    assetIds: v.array(v.string()),
+    assetIds: v.optional(v.array(v.string())),
+    assetLayouts: v.optional(v.array(reorderAssetLayoutValidator)),
   },
   handler: async (ctx, args) => {
     const shoot = await getActiveShootByPath(ctx, args.shootPath)
@@ -364,7 +383,12 @@ export const reorderAssets = mutation({
       throw new Error("Shoot not found.")
     }
 
-    await patchOrderedAssets(ctx, shoot.path, args.assetIds)
+    const orderedAssets = getOrderedAssetPatches(
+      args.assetIds,
+      args.assetLayouts
+    )
+
+    await patchOrderedAssets(ctx, shoot.path, orderedAssets)
 
     return null
   },
@@ -734,10 +758,54 @@ async function patchOrderedCategories(
   }
 }
 
+function getOrderedAssetPatches(
+  assetIds: string[] | undefined,
+  assetLayouts: ReorderAssetLayout[] | undefined
+): OrderedAssetPatch[] {
+  if (assetLayouts && assetLayouts.length > 0) {
+    return assetLayouts.map((assetLayout) => {
+      assertValidAssetLayout(assetLayout)
+
+      return assetLayout
+    })
+  }
+
+  if (assetIds && assetIds.length > 0) {
+    return assetIds.map((assetId) => ({ assetId }))
+  }
+
+  throw new Error("Photo order must include every photo in the shoot.")
+}
+
+function assertValidAssetLayout(assetLayout: ReorderAssetLayout) {
+  if (
+    !Number.isInteger(assetLayout.layoutColumnCount) ||
+    assetLayout.layoutColumnCount < 1 ||
+    assetLayout.layoutColumnCount > MAX_MASONRY_COLUMNS
+  ) {
+    throw new Error("Photo layout has an invalid column count.")
+  }
+
+  if (
+    !Number.isInteger(assetLayout.layoutColumn) ||
+    assetLayout.layoutColumn < 0 ||
+    assetLayout.layoutColumn >= assetLayout.layoutColumnCount
+  ) {
+    throw new Error("Photo layout has an invalid column.")
+  }
+
+  if (
+    !Number.isInteger(assetLayout.layoutOrder) ||
+    assetLayout.layoutOrder < 0
+  ) {
+    throw new Error("Photo layout has an invalid position.")
+  }
+}
+
 async function patchOrderedAssets(
   ctx: MutationCtx,
   shootPath: string,
-  assetIds: string[]
+  orderedAssets: OrderedAssetPatch[]
 ) {
   const assets = await listActiveAssetsForShoot(ctx, shootPath, MAX_ASSETS)
   const assetsById = new Map(
@@ -745,27 +813,43 @@ async function patchOrderedAssets(
   )
   const seenAssetIds = new Set<string>()
 
-  if (assetIds.length !== assets.length) {
+  if (orderedAssets.length !== assets.length) {
     throw new Error("Photo order must include every photo in the shoot.")
   }
 
-  for (const [index, assetId] of assetIds.entries()) {
-    if (seenAssetIds.has(assetId)) {
+  for (const [index, orderedAsset] of orderedAssets.entries()) {
+    if (seenAssetIds.has(orderedAsset.assetId)) {
       throw new Error("Photo order cannot include the same photo twice.")
     }
 
-    seenAssetIds.add(assetId)
+    seenAssetIds.add(orderedAsset.assetId)
 
-    const asset = assetsById.get(assetId)
+    const asset = assetsById.get(orderedAsset.assetId)
 
     if (!asset) {
       throw new Error("Photo order can only include photos in the shoot.")
     }
 
     const orderRank = (index + 1) * ORDER_STEP
+    const patch: Partial<
+      Pick<
+        MediaAsset,
+        "orderRank" | "layoutColumn" | "layoutOrder" | "layoutColumnCount"
+      >
+    > = {}
 
     if (asset.orderRank !== orderRank) {
-      await ctx.db.patch(asset._id, { orderRank })
+      patch.orderRank = orderRank
+    }
+
+    if (orderedAsset.layoutColumn !== undefined) {
+      patch.layoutColumn = orderedAsset.layoutColumn
+      patch.layoutOrder = orderedAsset.layoutOrder
+      patch.layoutColumnCount = orderedAsset.layoutColumnCount
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(asset._id, patch)
     }
   }
 }
@@ -1077,6 +1161,9 @@ function assetView(asset: MediaAsset) {
     createdAt: asset.createdAt,
     context: asset.context,
     orderRank: asset.orderRank,
+    layoutColumn: asset.layoutColumn ?? null,
+    layoutOrder: asset.layoutOrder ?? null,
+    layoutColumnCount: asset.layoutColumnCount ?? null,
   }
 }
 

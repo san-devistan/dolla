@@ -1,3 +1,4 @@
+import { assertAdminAuthenticated } from "@/lib/admin-auth.server"
 import {
   createCloudinaryFolder,
   deleteCloudinaryFolder,
@@ -93,6 +94,49 @@ function getStringArrayField(data: unknown, key: string) {
   return value.filter((item): item is string => typeof item === "string")
 }
 
+function getNumberField(data: unknown, key: string, fallback = 0) {
+  if (!data || typeof data !== "object") {
+    return fallback
+  }
+
+  const value = Reflect.get(data, key)
+
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback
+}
+
+function getAssetLayoutArrayField(data: unknown, key: string) {
+  if (!data || typeof data !== "object") {
+    return []
+  }
+
+  const value = Reflect.get(data, key)
+
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return []
+    }
+
+    const assetId = getStringField(item, "assetId")
+
+    if (!assetId) {
+      return []
+    }
+
+    return [
+      {
+        assetId,
+        layoutColumn: getNumberField(item, "layoutColumn"),
+        layoutOrder: getNumberField(item, "layoutOrder"),
+        layoutColumnCount: getNumberField(item, "layoutColumnCount", 1),
+      },
+    ]
+  })
+}
+
 const reorderShootsInput = (data: unknown) => ({
   categoryPath: getStringField(data, "categoryPath"),
   selectedFolder: getStringField(data, "selectedFolder", "Dolla"),
@@ -107,6 +151,7 @@ const reorderAssetsInput = (data: unknown) => ({
   shootPath: getStringField(data, "shootPath"),
   selectedFolder: getStringField(data, "selectedFolder", "Dolla"),
   assetIds: getStringArrayField(data, "assetIds"),
+  assetLayouts: getAssetLayoutArrayField(data, "assetLayouts"),
 })
 
 const setShootCoverInput = (data: unknown) => ({
@@ -225,55 +270,99 @@ const getCloudinaryShootFn = createServerFn({ method: "GET" })
 
 const createCloudinaryFolderFn = createServerFn({ method: "POST" })
   .inputValidator(createFolderInput)
-  .handler(async ({ data }) =>
-    createCloudinaryFolder(data.parentPath, data.name)
-  )
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return createCloudinaryFolder(data.parentPath, data.name)
+  })
 
 const renameCloudinaryFolderFn = createServerFn({ method: "POST" })
   .inputValidator(renameFolderInput)
-  .handler(async ({ data }) =>
-    renameCloudinaryFolder(data.folderPath, data.name)
-  )
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return renameCloudinaryFolder(data.folderPath, data.name)
+  })
 
 const deleteCloudinaryFolderFn = createServerFn({ method: "POST" })
   .inputValidator(deleteFolderInput)
-  .handler(async ({ data }) => deleteCloudinaryFolder(data.folderPath))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return deleteCloudinaryFolder(data.folderPath)
+  })
 
 const deleteCloudinaryShootAssetsFn = createServerFn({ method: "POST" })
   .inputValidator(deleteAssetsInput)
-  .handler(async ({ data }) => deleteCloudinaryShootAssets(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return deleteCloudinaryShootAssets(data)
+  })
 
 const reorderCloudinaryShootsFn = createServerFn({ method: "POST" })
   .inputValidator(reorderShootsInput)
-  .handler(async ({ data }) => reorderCloudinaryShoots(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return reorderCloudinaryShoots(data)
+  })
 
 const reorderCloudinaryCategoriesFn = createServerFn({ method: "POST" })
   .inputValidator(reorderCategoriesInput)
-  .handler(async ({ data }) => reorderCloudinaryCategories(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return reorderCloudinaryCategories(data)
+  })
 
 const reorderCloudinaryAssetsFn = createServerFn({ method: "POST" })
   .inputValidator(reorderAssetsInput)
-  .handler(async ({ data }) => reorderCloudinaryAssets(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return reorderCloudinaryAssets(data)
+  })
 
 const setCloudinaryShootCoverFn = createServerFn({ method: "POST" })
   .inputValidator(setShootCoverInput)
-  .handler(async ({ data }) => setCloudinaryShootCover(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return setCloudinaryShootCover(data)
+  })
 
 const setCloudinaryShootCreditsFn = createServerFn({ method: "POST" })
   .inputValidator(setShootCreditsInput)
-  .handler(async ({ data }) => setCloudinaryShootCredits(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return setCloudinaryShootCredits(data)
+  })
 
 const setCloudinaryAboutContentFn = createServerFn({ method: "POST" })
   .inputValidator(setAboutContentInput)
-  .handler(async ({ data }) => setCloudinaryAboutContent(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return setCloudinaryAboutContent(data)
+  })
 
 const setCloudinaryPricingItemsFn = createServerFn({ method: "POST" })
   .inputValidator(setPricingItemsInput)
-  .handler(async ({ data }) => setCloudinaryPricingItems(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return setCloudinaryPricingItems(data)
+  })
 
 const setCloudinaryCategoryCoverFn = createServerFn({ method: "POST" })
   .inputValidator(setCategoryCoverInput)
-  .handler(async ({ data }) => setCloudinaryCategoryCover(data))
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return setCloudinaryCategoryCover(data)
+  })
 
 export {
   createCloudinaryFolderFn,

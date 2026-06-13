@@ -63,6 +63,9 @@ export default defineSchema({
     createdAt: nullableString,
     context: v.record(v.string(), v.string()),
     orderRank: v.number(),
+    layoutColumn: v.optional(v.number()),
+    layoutOrder: v.optional(v.number()),
+    layoutColumnCount: v.optional(v.number()),
     syncedAt: v.number(),
     deletedAt: nullableNumber,
   })
@@ -93,6 +96,11 @@ export default defineSchema({
         bold: v.boolean(),
       })
     ),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+  contactSettings: defineTable({
+    key: v.string(),
+    notificationRecipients: v.array(v.string()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
 })

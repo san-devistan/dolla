@@ -1,9 +1,20 @@
-import { getMediaAdminSearch } from "@/lib/media-admin-mode"
+import { MobileGalleryHeader } from "@/features/cloudinary/mobile-gallery-header"
+import {
+  ADMIN_LOGOUT_ROUTE,
+  getAboutRoute,
+  getContactRoute,
+  getMediaCategoryRoute,
+  getMediaHomeRoute,
+  getPricingRoute,
+  getPublicPathForAdminPath,
+} from "@/lib/admin-routes"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import { Link, useRouterState } from "@tanstack/react-router"
 import { Badge } from "@workspace/ui/components/badge"
 import { buttonVariants } from "@workspace/ui/components/button"
+import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { cn } from "@workspace/ui/lib/utils"
+import { useCallback, useMemo } from "react"
 
 type GalleryCategory = {
   name: string
@@ -18,6 +29,23 @@ type GalleryHeaderProps<TCategory extends GalleryCategory> = {
   onSelectCategory?: (category: TCategory) => void
 }
 
+type GalleryHeaderContentProps<TCategory extends GalleryCategory> = Omit<
+  GalleryHeaderProps<TCategory>,
+  "isAdminMode" | "isBusy"
+> & {
+  currentPathname: string
+  isAdminMode: boolean
+  isBusy: boolean
+}
+
+type DesktopCategoryNavItemProps<TCategory extends GalleryCategory> = Pick<
+  GalleryHeaderContentProps<TCategory>,
+  "isAdminMode" | "isBusy" | "onSelectCategory"
+> & {
+  active: boolean
+  category: TCategory
+}
+
 function GalleryHeader<TCategory extends GalleryCategory>({
   activeCategoryPath,
   categories,
@@ -28,7 +56,32 @@ function GalleryHeader<TCategory extends GalleryCategory>({
   const currentPathname = useRouterState({
     select: (state) => state.location.pathname,
   })
+  const isMobile = useIsMobile()
 
+  const headerProps = {
+    activeCategoryPath,
+    categories,
+    currentPathname,
+    isAdminMode,
+    isBusy,
+    onSelectCategory,
+  }
+
+  if (isMobile) {
+    return <MobileGalleryHeader {...headerProps} />
+  }
+
+  return <DesktopGalleryHeader {...headerProps} />
+}
+
+function DesktopGalleryHeader<TCategory extends GalleryCategory>({
+  activeCategoryPath,
+  categories,
+  currentPathname,
+  isAdminMode,
+  isBusy,
+  onSelectCategory,
+}: GalleryHeaderContentProps<TCategory>) {
   return (
     <header
       className={cn(
@@ -51,7 +104,7 @@ function GalleryHeader<TCategory extends GalleryCategory>({
               Admin view
             </Badge>
             <a
-              href={currentPathname}
+              href={getPublicPathForAdminPath(currentPathname)}
               className={buttonVariants({
                 variant: "ghost",
                 size: "sm",
@@ -60,11 +113,20 @@ function GalleryHeader<TCategory extends GalleryCategory>({
             >
               Public view
             </a>
+            <a
+              href={ADMIN_LOGOUT_ROUTE}
+              className={buttonVariants({
+                variant: "outline",
+                size: "sm",
+                className: "font-black tracking-[0.22em]",
+              })}
+            >
+              Sign out
+            </a>
           </div>
         ) : null}
         <Link
-          to="/"
-          search={getMediaAdminSearch(isAdminMode)}
+          to={getMediaHomeRoute(isAdminMode)}
           className={cn(
             "justify-self-center font-sans text-3xl font-extrabold tracking-[0.1em] uppercase md:text-4xl",
             isAdminMode && "lg:col-start-2 lg:row-start-1"
@@ -78,52 +140,84 @@ function GalleryHeader<TCategory extends GalleryCategory>({
         className="mt-8 flex flex-wrap justify-center gap-x-14 gap-y-3 text-sm tracking-wide uppercase"
       >
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3">
-          {categories.map((category) =>
-            onSelectCategory ? (
-              <button
-                key={category.path}
-                type="button"
-                disabled={isBusy}
-                className={getCategoryLinkClass(
-                  category.path === activeCategoryPath
-                )}
-                onClick={() => onSelectCategory(category)}
-              >
-                {category.name}
-              </button>
-            ) : (
-              <Link
-                key={category.path}
-                to="/$category"
-                params={{ category: toMediaRouteSegment(category.name) }}
-                search={getMediaAdminSearch(isAdminMode)}
-                className={getCategoryLinkClass(
-                  category.path === activeCategoryPath
-                )}
-              >
-                {category.name}
-              </Link>
-            )
-          )}
+          {categories.map((category) => (
+            <DesktopCategoryNavItem
+              key={category.path}
+              active={category.path === activeCategoryPath}
+              category={category}
+              isAdminMode={isAdminMode}
+              isBusy={isBusy}
+              onSelectCategory={onSelectCategory}
+            />
+          ))}
         </div>
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3">
           <Link
-            to="/about"
-            search={getMediaAdminSearch(isAdminMode)}
-            className={getCategoryLinkClass(currentPathname === "/about")}
+            to={getPricingRoute(isAdminMode)}
+            className={getCategoryLinkClass(
+              currentPathname === getPricingRoute(isAdminMode)
+            )}
+          >
+            Pricing
+          </Link>
+          <Link
+            to={getAboutRoute(isAdminMode)}
+            className={getCategoryLinkClass(
+              currentPathname === getAboutRoute(isAdminMode)
+            )}
           >
             About
           </Link>
           <Link
-            to="/pricing"
-            search={getMediaAdminSearch(isAdminMode)}
-            className={getCategoryLinkClass(currentPathname === "/pricing")}
+            to={getContactRoute(isAdminMode)}
+            className={getCategoryLinkClass(
+              currentPathname === getContactRoute(isAdminMode)
+            )}
           >
-            Pricing
+            Contact
           </Link>
         </div>
       </nav>
     </header>
+  )
+}
+
+function DesktopCategoryNavItem<TCategory extends GalleryCategory>({
+  active,
+  category,
+  isAdminMode,
+  isBusy,
+  onSelectCategory,
+}: DesktopCategoryNavItemProps<TCategory>) {
+  const categoryParams = useMemo(
+    () => ({ category: toMediaRouteSegment(category.name) }),
+    [category.name]
+  )
+  const handleSelectCategory = useCallback(() => {
+    onSelectCategory?.(category)
+  }, [category, onSelectCategory])
+
+  if (onSelectCategory) {
+    return (
+      <button
+        type="button"
+        disabled={isBusy}
+        className={getCategoryLinkClass(active)}
+        onClick={handleSelectCategory}
+      >
+        {category.name}
+      </button>
+    )
+  }
+
+  return (
+    <Link
+      to={getMediaCategoryRoute(isAdminMode)}
+      params={categoryParams}
+      className={getCategoryLinkClass(active)}
+    >
+      {category.name}
+    </Link>
   )
 }
 
