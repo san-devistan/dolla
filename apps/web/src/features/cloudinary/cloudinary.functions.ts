@@ -9,6 +9,7 @@ import {
   getCloudinaryLibrary,
   getCloudinaryPricing,
   getCloudinaryShoot,
+  moveCloudinaryShoots,
   renameCloudinaryFolder,
   reorderCloudinaryAssets,
   reorderCloudinaryCategories,
@@ -79,6 +80,12 @@ const deleteAssetsInput = (data: unknown) => ({
   shootPath: getStringField(data, "shootPath"),
   selectedFolder: getStringField(data, "selectedFolder", "Dolla"),
   assetIds: getStringArrayField(data, "assetIds"),
+})
+
+const moveShootsInput = (data: unknown) => ({
+  selectedFolder: getStringField(data, "selectedFolder", "Dolla"),
+  shootPaths: getStringArrayField(data, "shootPaths"),
+  targetCategoryPath: getStringField(data, "targetCategoryPath"),
 })
 
 function getStringArrayField(data: unknown, key: string) {
@@ -307,6 +314,14 @@ const deleteCloudinaryShootAssetsFn = createServerFn({ method: "POST" })
     return deleteCloudinaryShootAssets(data)
   })
 
+const moveCloudinaryShootsFn = createServerFn({ method: "POST" })
+  .inputValidator(moveShootsInput)
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return moveCloudinaryShoots(data)
+  })
+
 const reorderCloudinaryShootsFn = createServerFn({ method: "POST" })
   .inputValidator(reorderShootsInput)
   .handler(async ({ data }) => {
@@ -389,6 +404,7 @@ export {
   getCloudinaryLibraryFn,
   getCloudinaryPricingFn,
   getCloudinaryShootFn,
+  moveCloudinaryShootsFn,
   renameCloudinaryFolderFn,
   reorderCloudinaryAssetsFn,
   reorderCloudinaryCategoriesFn,

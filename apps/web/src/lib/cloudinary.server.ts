@@ -2264,6 +2264,131 @@ async function renameCloudinaryFolder(folderPath: string, name: string) {
   return getCloudinaryLibrary(toFolder)
 }
 
+async function moveCloudinaryShoots({
+  selectedFolder,
+  shootPaths,
+  targetCategoryPath,
+}: {
+  selectedFolder: string
+  shootPaths: string[]
+  targetCategoryPath: string
+}) {
+  configureCloudinary()
+
+  const normalizedSelectedFolder = normalizeDollaFolderPath(selectedFolder)
+  const normalizedTargetCategoryPath =
+    normalizeDollaFolderPath(targetCategoryPath)
+  const targetCategoryInfo = getFolderInfo(normalizedTargetCategoryPath)
+  const normalizedShootPaths = getUniqueFolderPaths(shootPaths)
+
+  if (targetCategoryInfo.kind !== "category") {
+    throw new Error("Move shoots into a category folder.")
+  }
+
+  if (normalizedShootPaths.length === 0) {
+    throw new Error("Select at least one shoot to move.")
+  }
+
+  const foldersBeforeMove = await searchDollaFolders()
+  const targetCategory = foldersBeforeMove.find(
+    (folder) =>
+      folder.kind === "category" && folder.path === normalizedTargetCategoryPath
+  )
+
+  if (!targetCategory) {
+    throw new Error("Target category not found.")
+  }
+
+  const selectedShootPathSet = new Set(normalizedShootPaths)
+  const moves = normalizedShootPaths.map((shootPath) => {
+    const shoot = foldersBeforeMove.find((folder) => folder.path === shootPath)
+
+    if (!shoot || shoot.kind !== "shoot") {
+      throw new Error("Selected shoots must be existing shoot folders.")
+    }
+
+    if (shoot.parentPath === targetCategory.path) {
+      throw new Error("Choose a different category for the selected shoots.")
+    }
+
+    return {
+      fromPath: shoot.path,
+      toPath: buildShootFolderPathForCategoryPath(
+        targetCategory.path,
+        shoot.name
+      ),
+    }
+  })
+  const targetShootPaths = new Set<string>()
+
+  for (const move of moves) {
+    if (targetShootPaths.has(move.toPath)) {
+      throw new Error("Selected shoots must have unique names.")
+    }
+
+    targetShootPaths.add(move.toPath)
+  }
+
+  const conflictingShoot = foldersBeforeMove.find(
+    (folder) =>
+      folder.kind === "shoot" &&
+      targetShootPaths.has(folder.path) &&
+      !selectedShootPathSet.has(folder.path)
+  )
+
+  if (conflictingShoot) {
+    throw new Error(
+      `"${conflictingShoot.name}" already exists in ${targetCategory.name}.`
+    )
+  }
+
+  await Promise.all(
+    moves.map((move) =>
+      cloudinary.api.rename_folder(move.fromPath, move.toPath)
+    )
+  )
+
+  const movedShootPaths = moves.map((move) => move.toPath)
+  const foldersAfterMove = await searchDollaFolders()
+  const movedAssets = await searchAssetsInFolders({
+    folderPaths: movedShootPaths,
+    imageOnly: true,
+  })
+  const convexClient = getConvexMediaClient()
+
+  if (convexClient) {
+    await syncCloudinaryMetadata({
+      client: convexClient,
+      folders: foldersAfterMove,
+      assets: movedAssets,
+      markMissingFolders: true,
+      assetFolderPaths: [
+        ...moves.map((move) => move.fromPath),
+        ...movedShootPaths,
+      ],
+    })
+    await convexClient.mutation(api.media.preserveMovedShootMetadata, {
+      moves,
+    })
+  }
+
+  return getCloudinaryLibrary(normalizedSelectedFolder)
+}
+
+function getUniqueFolderPaths(folderPaths: string[]) {
+  const uniquePaths = new Set<string>()
+
+  for (const folderPath of folderPaths) {
+    const normalizedPath = normalizeDollaFolderPath(folderPath)
+
+    if (normalizedPath) {
+      uniquePaths.add(normalizedPath)
+    }
+  }
+
+  return Array.from(uniquePaths)
+}
+
 async function deleteCloudinaryAssets(assets: CloudinaryAsset[]) {
   const uniqueAssets = dedupeAssets(assets)
   const assetIds = uniqueAssets
@@ -2650,6 +2775,7 @@ export {
   getCloudinaryPricing,
   getCloudinaryShoot,
   normalizeDollaFolderPath,
+  moveCloudinaryShoots,
   renameCloudinaryFolder,
   reorderCloudinaryAssets,
   reorderCloudinaryCategories,

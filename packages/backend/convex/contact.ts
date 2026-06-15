@@ -1,13 +1,12 @@
-import { Resend } from "@convex-dev/resend"
 import { v } from "convex/values"
 
-import { components } from "./_generated/api"
 import {
   mutation,
   query,
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server"
+import { resend } from "./email"
 
 const CONTACT_SETTINGS_KEY = "contact"
 const MAX_NAME_LENGTH = 100
@@ -87,10 +86,6 @@ const DEFAULT_CONTACT_SETTINGS = {
 } satisfies ContactSettings
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-export const resend: Resend = new Resend(components.resend, {
-  testMode: false,
-})
 
 export const getContactSettings = query({
   args: {},

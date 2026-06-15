@@ -1,3 +1,4 @@
+import { getBoldRanges } from "@/features/cloudinary/about-draft-ranges"
 import {
   ABOUT_EDITOR_BLOCK_SELECTOR,
   getDisplayOffsetForDraftOffset,
@@ -45,10 +46,34 @@ function getEditorSelectionDraftRange(
     return null
   }
 
-  return {
+  return normalizeSelectionRangeAroundBoldMarkers(draftText, {
     selectionEnd: Math.max(selectionStart, selectionEnd),
     selectionStart: Math.min(selectionStart, selectionEnd),
+  })
+}
+
+function normalizeSelectionRangeAroundBoldMarkers(
+  draftText: string,
+  selectionRange: DraftSelectionRange
+): DraftSelectionRange {
+  if (selectionRange.selectionStart === selectionRange.selectionEnd) {
+    return selectionRange
   }
+
+  for (const boldRange of getBoldRanges(draftText)) {
+    if (
+      selectionRange.selectionStart >= boldRange.innerStart &&
+      selectionRange.selectionStart < boldRange.innerEnd &&
+      selectionRange.selectionEnd === boldRange.end
+    ) {
+      return {
+        selectionStart: selectionRange.selectionStart,
+        selectionEnd: boldRange.innerEnd,
+      }
+    }
+  }
+
+  return selectionRange
 }
 
 function restoreEditorSelection(

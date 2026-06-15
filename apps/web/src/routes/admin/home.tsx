@@ -1,16 +1,8 @@
-import { getCloudinaryHomeFn } from "@/features/cloudinary/cloudinary.functions"
-import { requireAdminAuth } from "@/lib/admin-route-auth"
-import { DollaHomePage } from "@/routes/index"
-import { createFileRoute } from "@tanstack/react-router"
+import { ADMIN_HOME_ROUTE } from "@/lib/admin-routes"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/admin/home")({
-  beforeLoad: ({ location }) => requireAdminAuth(location),
-  loader: () => getCloudinaryHomeFn({ data: {} }),
-  component: AdminHomePage,
+  beforeLoad: () => {
+    throw redirect({ to: ADMIN_HOME_ROUTE })
+  },
 })
-
-function AdminHomePage() {
-  const initialHome = Route.useLoaderData()
-
-  return <DollaHomePage initialHome={initialHome} isAdminMode />
-}

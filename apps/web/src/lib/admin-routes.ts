@@ -1,4 +1,5 @@
-const ADMIN_HOME_ROUTE = "/admin/home" as const
+const ADMIN_HOME_ROUTE = "/admin" as const
+const ADMIN_LEGACY_HOME_ROUTE = "/admin/home" as const
 const ADMIN_LEGACY_MEDIA_ROUTE = "/admin/media" as const
 const ADMIN_CATEGORY_ROUTE = "/admin/$category" as const
 const ADMIN_SHOOT_ROUTE = "/admin/$category/$shoot" as const
@@ -59,7 +60,7 @@ function getSafeAdminRedirect(value: string | undefined) {
 }
 
 function getPublicPathForAdminPath(pathname: string) {
-  if (pathname === ADMIN_HOME_ROUTE) {
+  if (pathname === ADMIN_HOME_ROUTE || pathname === ADMIN_LEGACY_HOME_ROUTE) {
     return PUBLIC_HOME_ROUTE
   }
 

@@ -72,6 +72,11 @@ const reorderAssetLayoutValidator = v.object({
   layoutColumnCount: v.number(),
 })
 
+const movedShootValidator = v.object({
+  fromPath: v.string(),
+  toPath: v.string(),
+})
+
 const siteContentBlockValidator = v.object({
   id: v.string(),
   kind: v.union(v.literal("paragraph"), v.literal("heading")),
@@ -398,6 +403,38 @@ export const reorderAssets = mutation({
     )
 
     await patchOrderedAssets(ctx, shoot.path, orderedAssets)
+
+    return null
+  },
+})
+
+export const preserveMovedShootMetadata = mutation({
+  args: {
+    moves: v.array(movedShootValidator),
+  },
+  handler: async (ctx, args) => {
+    for (const move of args.moves) {
+      const sourceShoot = await getShootByPath(ctx, move.fromPath)
+      const targetShoot = await getShootByPath(ctx, move.toPath)
+
+      if (!sourceShoot || !targetShoot) {
+        continue
+      }
+
+      await ctx.db.patch(targetShoot._id, {
+        coverAssetId: sourceShoot.coverAssetId,
+        credits: sourceShoot.credits ?? "",
+      })
+
+      const sourceCategory = await getCategoryByPath(
+        ctx,
+        sourceShoot.categoryPath
+      )
+
+      if (sourceCategory?.coverShootPath === sourceShoot.path) {
+        await ctx.db.patch(sourceCategory._id, { coverShootPath: null })
+      }
+    }
 
     return null
   },

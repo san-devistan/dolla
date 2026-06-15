@@ -9,6 +9,7 @@
  */
 
 import type * as contact from "../contact.js";
+import type * as email from "../email.js";
 import type * as http from "../http.js";
 import type * as media from "../media.js";
 
@@ -20,6 +21,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   contact: typeof contact;
+  email: typeof email;
   http: typeof http;
   media: typeof media;
 }>;

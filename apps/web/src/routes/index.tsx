@@ -47,10 +47,8 @@ import {
   useState,
 } from "react"
 
-type CategoryDropPosition = "before" | "after"
 type CategoryDropTarget = {
   categoryPath: string
-  position: CategoryDropPosition
 }
 
 export const Route = createFileRoute("/")({
@@ -166,17 +164,13 @@ function DollaHomePage({
 
     event.preventDefault()
     event.dataTransfer.dropEffect = "move"
-    const position = getCategoryDropPosition(event)
 
     setCategoryDropTarget((currentDropTarget) => {
-      if (
-        currentDropTarget?.categoryPath === categoryPath &&
-        currentDropTarget.position === position
-      ) {
+      if (currentDropTarget?.categoryPath === categoryPath) {
         return currentDropTarget
       }
 
-      return { categoryPath, position }
+      return { categoryPath }
     })
   }
 
@@ -192,20 +186,15 @@ function DollaHomePage({
 
     const draggedCategoryPath =
       event.dataTransfer.getData("text/plain") || draggingCategoryPath
-    const dropPosition =
-      categoryDropTarget?.categoryPath === categoryPath
-        ? categoryDropTarget.position
-        : getCategoryDropPosition(event)
 
     if (!draggedCategoryPath || draggedCategoryPath === categoryPath) {
       return
     }
 
-    const nextCategories = moveItemToDropTarget(
+    const nextCategories = swapItemsById(
       home.categories,
       draggedCategoryPath,
       categoryPath,
-      dropPosition,
       (category) => category.path
     )
 
@@ -282,7 +271,7 @@ function DollaHomePage({
       >
         {isAdminMode ? <ConnectionNotice connection={home.connection} /> : null}
         <HomeHeroCarousel assets={home.heroAssets} isAdminMode={isAdminMode} />
-        <div className="mt-2 mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mt-3 md:mb-7">
+        <div className="my-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:my-10">
           <div>
             <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
               Categories
@@ -375,7 +364,7 @@ function HomeHeroCarousel({
   return (
     <section
       aria-label="Homepage carousel"
-      className="relative mt-1 mb-8 overflow-hidden bg-muted md:mb-12"
+      className="relative mt-1 overflow-hidden bg-muted"
     >
       <div className="relative h-[clamp(34rem,72svh,48rem)] sm:h-[clamp(36rem,78svh,52rem)] lg:h-[clamp(38rem,82svh,58rem)]">
         {assets.map((asset, index) => {
@@ -581,11 +570,9 @@ function CategoryGrid({
           key={category.path}
           category={category}
           canOrganizeCategories={canOrganizeCategories}
-          dropPosition={
+          isSwapTarget={
             categoryDropTarget?.categoryPath === category.path &&
             draggingCategoryPath !== category.path
-              ? categoryDropTarget.position
-              : null
           }
           isDragging={draggingCategoryPath === category.path}
           isAdminMode={isAdminMode}
@@ -604,7 +591,7 @@ function CategoryGrid({
 function CategoryCard({
   category,
   canOrganizeCategories,
-  dropPosition,
+  isSwapTarget,
   isDragging,
   isAdminMode,
   isBusy,
@@ -616,7 +603,7 @@ function CategoryCard({
 }: {
   category: CloudinaryHome["categories"][number]
   canOrganizeCategories: boolean
-  dropPosition: CategoryDropPosition | null
+  isSwapTarget: boolean
   isDragging: boolean
   isAdminMode: boolean
   isBusy: boolean
@@ -640,7 +627,7 @@ function CategoryCard({
         isAdminMode && canOrganizeCategories && !isBusy
           ? "cursor-grab active:cursor-grabbing"
           : "",
-        dropPosition ? "ring-2 ring-brand/70" : "",
+        isSwapTarget ? "ring-2 ring-brand/70" : "",
         isDragging ? "opacity-45 ring-2 ring-brand/50" : ""
       )}
       onDragStart={(event) => onCategoryDragStart(event, category.path)}
@@ -648,20 +635,42 @@ function CategoryCard({
       onDrop={(event) => onCategoryDrop(event, category.path)}
       onDragEnd={onCategoryDragEnd}
     >
-      {dropPosition ? (
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-x-0 z-30 flex justify-center",
-            dropPosition === "before" ? "top-0" : "bottom-0"
-          )}
-        >
-          <div className="h-1 w-[calc(100%-1rem)] bg-brand shadow-[0_0_0_1px_hsl(var(--background)),0_0_18px_hsl(var(--brand)/0.6)]" />
-        </div>
+      {isSwapTarget ? (
+        <div className="pointer-events-none absolute inset-2 z-30 border-2 border-brand shadow-[0_0_0_1px_hsl(var(--background)),0_0_18px_hsl(var(--brand)/0.6)]" />
       ) : null}
       <Link
         to={getMediaCategoryRoute(isAdminMode)}
         params={{ category: toMediaRouteSegment(category.name) }}
+        draggable={isAdminMode && canOrganizeCategories && !isBusy}
         className="block w-full text-left ring-offset-background transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onDragStart={(event) => {
+          event.stopPropagation()
+
+          if (isAdminMode) {
+            onCategoryDragStart(event, category.path)
+          }
+        }}
+        onDragOver={(event) => {
+          event.stopPropagation()
+
+          if (isAdminMode) {
+            onCategoryDragOver(event, category.path)
+          }
+        }}
+        onDrop={(event) => {
+          event.stopPropagation()
+
+          if (isAdminMode) {
+            onCategoryDrop(event, category.path)
+          }
+        }}
+        onDragEnd={(event) => {
+          event.stopPropagation()
+
+          if (isAdminMode) {
+            onCategoryDragEnd()
+          }
+        }}
       >
         <div className="relative aspect-[3/4]">
           {category.cover ? (
@@ -670,6 +679,7 @@ function CategoryCard({
               srcSet={category.cover.thumbnailSrcSet}
               sizes={CARD_IMAGE_SIZES}
               alt={category.name}
+              draggable={false}
               className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.035]"
               {...getImageLoadingProps(isPriority)}
             />
@@ -795,20 +805,10 @@ function ConnectionNotice({
   )
 }
 
-function getCategoryDropPosition(
-  event: DragEvent<HTMLElement>
-): CategoryDropPosition {
-  const bounds = event.currentTarget.getBoundingClientRect()
-  const midpoint = bounds.top + bounds.height / 2
-
-  return event.clientY < midpoint ? "before" : "after"
-}
-
-function moveItemToDropTarget<T>(
+function swapItemsById<T>(
   items: T[],
   draggedId: string,
   targetId: string,
-  dropPosition: CategoryDropPosition,
   getItemId: (item: T) => string
 ) {
   const fromIndex = items.findIndex((item) => getItemId(item) === draggedId)
@@ -819,31 +819,15 @@ function moveItemToDropTarget<T>(
   }
 
   const nextItems = items.slice()
-  const [draggedItem] = nextItems.splice(fromIndex, 1)
+  const draggedItem = nextItems[fromIndex]
+  const targetItem = nextItems[toIndex]
 
-  if (!draggedItem) {
+  if (!draggedItem || !targetItem) {
     return null
   }
 
-  const nextIndex = nextItems.findIndex((item) => getItemId(item) === targetId)
-
-  if (nextIndex === -1) {
-    return null
-  }
-
-  const insertIndex = dropPosition === "after" ? nextIndex + 1 : nextIndex
-
-  nextItems.splice(insertIndex, 0, draggedItem)
-
-  const didChange = nextItems.some((item, index) => {
-    const previousItem = items[index]
-
-    return !previousItem || getItemId(item) !== getItemId(previousItem)
-  })
-
-  if (!didChange) {
-    return null
-  }
+  nextItems[fromIndex] = targetItem
+  nextItems[toIndex] = draggedItem
 
   return nextItems
 }

@@ -2,6 +2,7 @@ import {
   createCloudinaryFolderFn,
   deleteCloudinaryFolderFn,
   getCloudinaryCategoryFn,
+  moveCloudinaryShootsFn,
   renameCloudinaryFolderFn,
   reorderCloudinaryShootsFn,
   setCloudinaryCategoryCoverFn,
@@ -45,6 +46,7 @@ import {
   AlertDialogTrigger,
 } from "@workspace/ui/components/alert-dialog"
 import { Button } from "@workspace/ui/components/button"
+import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
   Dialog,
   DialogClose,
@@ -57,11 +59,19 @@ import {
 } from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { toast } from "@workspace/ui/components/sonner"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   AlertTriangleIcon,
   CheckIcon,
+  FolderInputIcon,
   PencilIcon,
   PlusIcon,
   StarIcon,
@@ -73,14 +83,13 @@ import {
   type DragEvent,
   type FormEvent,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react"
 
-type ShootDropPosition = "before" | "after"
 type ShootDropTarget = {
   shootPath: string
-  position: ShootDropPosition
 }
 
 export const Route = createFileRoute("/$category")({
@@ -132,16 +141,31 @@ function CategoryPage({
   )
   const [shootDropTarget, setShootDropTarget] =
     useState<ShootDropTarget | null>(null)
+  const [selectedShootPaths, setSelectedShootPaths] = useState<Set<string>>(
+    () => new Set()
+  )
+  const [moveTargetCategoryPath, setMoveTargetCategoryPath] = useState("")
   const [isBusy, setIsBusy] = useState(false)
 
   const getCategory = useServerFn(getCloudinaryCategoryFn)
   const createFolder = useServerFn(createCloudinaryFolderFn)
   const renameFolder = useServerFn(renameCloudinaryFolderFn)
   const deleteFolder = useServerFn(deleteCloudinaryFolderFn)
+  const moveShoots = useServerFn(moveCloudinaryShootsFn)
   const reorderShoots = useServerFn(reorderCloudinaryShootsFn)
   const setCategoryCover = useServerFn(setCloudinaryCategoryCoverFn)
   const selectedCategory = categoryPage.category || undefined
+  const selectedCategoryPath = selectedCategory?.path
   const shoots = categoryPage.shoots
+  const moveTargetCategories = useMemo(() => {
+    if (!selectedCategoryPath) {
+      return []
+    }
+
+    return categoryPage.categories.filter(
+      (categorySummary) => categorySummary.path !== selectedCategoryPath
+    )
+  }, [categoryPage.categories, selectedCategoryPath])
   const canMutate =
     categoryPage.connection.configured &&
     !categoryPage.connection.error &&
@@ -150,6 +174,9 @@ function CategoryPage({
   const canOrganizeShoots =
     canMutate && selectedCategory?.orderRank !== undefined
   const canRenameCategory = canMutate && Boolean(selectedCategory)
+  const canDeleteSelectedShoots = canMutate && selectedShootPaths.size > 0
+  const canMoveSelectedShoots =
+    canMutate && selectedShootPaths.size > 0 && moveTargetCategories.length > 0
 
   useEffect(() => {
     setCategoryPage(initialCategoryPage)
@@ -157,7 +184,27 @@ function CategoryPage({
     setIsRenamingCategory(false)
     setDraggingShootPath(null)
     setShootDropTarget(null)
+    setSelectedShootPaths(new Set())
+    setMoveTargetCategoryPath("")
   }, [initialCategoryPage])
+
+  useEffect(() => {
+    if (moveTargetCategories.length === 0) {
+      if (moveTargetCategoryPath) {
+        setMoveTargetCategoryPath("")
+      }
+
+      return
+    }
+
+    if (
+      !moveTargetCategories.some(
+        (categorySummary) => categorySummary.path === moveTargetCategoryPath
+      )
+    ) {
+      setMoveTargetCategoryPath(moveTargetCategories[0]?.path || "")
+    }
+  }, [moveTargetCategories, moveTargetCategoryPath])
 
   function handleCreateShootDialogOpenChange(open: boolean) {
     setIsCreateShootDialogOpen(open)
@@ -333,6 +380,114 @@ function CategoryPage({
     })
   }
 
+  function toggleShootSelection(shootPath: string, selected?: boolean) {
+    setSelectedShootPaths((currentShootPaths) => {
+      const nextShootPaths = new Set(currentShootPaths)
+      const shouldSelect = selected ?? !nextShootPaths.has(shootPath)
+
+      if (shouldSelect) {
+        nextShootPaths.add(shootPath)
+      } else {
+        nextShootPaths.delete(shootPath)
+      }
+
+      return nextShootPaths
+    })
+  }
+
+  function clearShootSelection() {
+    setSelectedShootPaths(new Set())
+  }
+
+  function handleDeleteSelectedShoots() {
+    if (!selectedCategory) {
+      return
+    }
+
+    const shootPaths = Array.from(selectedShootPaths)
+
+    if (shootPaths.length === 0) {
+      return
+    }
+
+    const deleteShootsPromise = performCategoryAction(async () => {
+      await Promise.all(
+        shootPaths.map((shootPath) =>
+          deleteFolder({ data: { folderPath: shootPath } })
+        )
+      )
+
+      return await getCategory({
+        data: { categoryName: selectedCategory.name, refresh: true },
+      })
+    })
+
+    toast.promise(deleteShootsPromise, {
+      loading: "Deleting shoots...",
+      success: shootPaths.length === 1 ? "Shoot deleted" : "Shoots deleted",
+      error: (deleteError) => getErrorMessage(deleteError),
+    })
+
+    void deleteShootsPromise
+      .then(() => {
+        clearShootSelection()
+
+        return undefined
+      })
+      .catch(() => undefined)
+  }
+
+  function handleMoveSelectedShoots() {
+    if (!selectedCategory) {
+      return
+    }
+
+    const shootPaths = Array.from(selectedShootPaths)
+    const targetCategory = moveTargetCategories.find(
+      (categorySummary) => categorySummary.path === moveTargetCategoryPath
+    )
+
+    if (shootPaths.length === 0) {
+      return
+    }
+
+    if (!targetCategory) {
+      toast.error("Choose a category to move shoots into.")
+      return
+    }
+
+    const moveShootsPromise = performCategoryAction(async () => {
+      await moveShoots({
+        data: {
+          selectedFolder: selectedCategory.path,
+          shootPaths,
+          targetCategoryPath: targetCategory.path,
+        },
+      })
+
+      return await getCategory({
+        data: { categoryName: selectedCategory.name, refresh: true },
+      })
+    })
+
+    toast.promise(moveShootsPromise, {
+      loading: "Moving shoots...",
+      success:
+        shootPaths.length === 1
+          ? `Shoot moved to ${targetCategory.name}`
+          : `Shoots moved to ${targetCategory.name}`,
+      error: (moveError) => getErrorMessage(moveError),
+    })
+
+    void moveShootsPromise
+      .then(() => {
+        clearShootSelection()
+
+        return undefined
+      })
+      .catch(() => undefined)
+  }
+
   function handleSetCategoryCover(shootPath: string) {
     if (!selectedCategory) {
       return
@@ -404,17 +559,13 @@ function CategoryPage({
 
     event.preventDefault()
     event.dataTransfer.dropEffect = "move"
-    const position = getShootDropPosition(event)
 
     setShootDropTarget((currentDropTarget) => {
-      if (
-        currentDropTarget?.shootPath === shootPath &&
-        currentDropTarget.position === position
-      ) {
+      if (currentDropTarget?.shootPath === shootPath) {
         return currentDropTarget
       }
 
-      return { shootPath, position }
+      return { shootPath }
     })
   }
 
@@ -427,21 +578,12 @@ function CategoryPage({
 
     const draggedShootPath =
       event.dataTransfer.getData("text/plain") || draggingShootPath
-    const dropPosition =
-      shootDropTarget?.shootPath === shootPath
-        ? shootDropTarget.position
-        : getShootDropPosition(event)
 
     if (!draggedShootPath || draggedShootPath === shootPath) {
       return
     }
 
-    const nextShoots = moveShootToDropTarget(
-      shoots,
-      draggedShootPath,
-      shootPath,
-      dropPosition
-    )
+    const nextShoots = swapShoots(shoots, draggedShootPath, shootPath)
 
     if (!nextShoots) {
       return
@@ -536,38 +678,56 @@ function CategoryPage({
           <Outlet />
         </div>
       ) : selectedCategory ? (
-        <CategoryShootSurface
-          canCreateShoot={canCreateShoot}
-          canDeleteCategory={canRenameCategory}
-          canOrganize={canOrganizeShoots}
-          canRenameCategory={canRenameCategory}
-          category={selectedCategory}
-          connection={categoryPage.connection}
-          createShootFiles={createShootFiles}
-          createShootName={createShootName}
-          draggingShootPath={draggingShootPath}
-          isAdminMode={isAdminMode}
-          isBusy={isBusy}
-          isCreateShootDialogOpen={isCreateShootDialogOpen}
-          isRenamingCategory={isRenamingCategory}
-          renameName={renameName}
-          shootDropTarget={shootDropTarget}
-          shoots={shoots}
-          onCancelRenamingCategory={cancelRenamingCategory}
-          onCreateShoot={handleCreateShoot}
-          onCreateShootDialogOpenChange={handleCreateShootDialogOpenChange}
-          onCreateShootFilesChange={handleCreateShootFilesChange}
-          onCreateShootNameChange={setCreateShootName}
-          onDeleteCategory={handleDeleteCategory}
-          onDragEnd={handleShootDragEnd}
-          onRenameCategory={handleRenameCategory}
-          onRenameNameChange={setRenameName}
-          onSetCategoryCover={handleSetCategoryCover}
-          onShootDragOver={handleShootDragOver}
-          onShootDragStart={handleShootDragStart}
-          onShootDrop={handleShootDrop}
-          onStartRenamingCategory={startRenamingCategory}
-        />
+        <>
+          <CategoryShootSurface
+            canCreateShoot={canCreateShoot}
+            canDeleteCategory={canRenameCategory}
+            canOrganize={canOrganizeShoots}
+            canRenameCategory={canRenameCategory}
+            category={selectedCategory}
+            connection={categoryPage.connection}
+            createShootFiles={createShootFiles}
+            createShootName={createShootName}
+            draggingShootPath={draggingShootPath}
+            isAdminMode={isAdminMode}
+            isBusy={isBusy}
+            isCreateShootDialogOpen={isCreateShootDialogOpen}
+            isRenamingCategory={isRenamingCategory}
+            renameName={renameName}
+            selectedShootPaths={selectedShootPaths}
+            shootDropTarget={shootDropTarget}
+            shoots={shoots}
+            onCancelRenamingCategory={cancelRenamingCategory}
+            onCreateShoot={handleCreateShoot}
+            onCreateShootDialogOpenChange={handleCreateShootDialogOpenChange}
+            onCreateShootFilesChange={handleCreateShootFilesChange}
+            onCreateShootNameChange={setCreateShootName}
+            onDeleteCategory={handleDeleteCategory}
+            onDragEnd={handleShootDragEnd}
+            onRenameCategory={handleRenameCategory}
+            onRenameNameChange={setRenameName}
+            onSetCategoryCover={handleSetCategoryCover}
+            onShootDragOver={handleShootDragOver}
+            onShootDragStart={handleShootDragStart}
+            onShootDrop={handleShootDrop}
+            onShootSelectionChange={toggleShootSelection}
+            onStartRenamingCategory={startRenamingCategory}
+          />
+          {isAdminMode && selectedShootPaths.size > 0 ? (
+            <SelectedShootsActionBar
+              availableTargetCategories={moveTargetCategories}
+              canDelete={canDeleteSelectedShoots}
+              canMove={canMoveSelectedShoots}
+              isBusy={isBusy}
+              moveTargetCategoryPath={moveTargetCategoryPath}
+              selectedCount={selectedShootPaths.size}
+              onClearSelection={clearShootSelection}
+              onDeleteSelected={handleDeleteSelectedShoots}
+              onMoveSelected={handleMoveSelectedShoots}
+              onMoveTargetCategoryPathChange={setMoveTargetCategoryPath}
+            />
+          ) : null}
+        </>
       ) : (
         <MissingCategory categoryName={category} />
       )}
@@ -592,6 +752,7 @@ function CategoryShootSurface({
   isCreateShootDialogOpen,
   isRenamingCategory,
   renameName,
+  selectedShootPaths,
   shootDropTarget,
   shoots,
   onCancelRenamingCategory,
@@ -607,6 +768,7 @@ function CategoryShootSurface({
   onShootDragOver,
   onShootDragStart,
   onShootDrop,
+  onShootSelectionChange,
   onStartRenamingCategory,
 }: {
   canCreateShoot: boolean
@@ -623,6 +785,7 @@ function CategoryShootSurface({
   isCreateShootDialogOpen: boolean
   isRenamingCategory: boolean
   renameName: string
+  selectedShootPaths: Set<string>
   shootDropTarget: ShootDropTarget | null
   shoots: CloudinaryShootSummary[]
   onCancelRenamingCategory: () => void
@@ -638,6 +801,7 @@ function CategoryShootSurface({
   onShootDragOver: (event: DragEvent<HTMLElement>, shootPath: string) => void
   onShootDragStart: (event: DragEvent<HTMLElement>, shootPath: string) => void
   onShootDrop: (event: DragEvent<HTMLElement>, shootPath: string) => void
+  onShootSelectionChange: (shootPath: string, selected?: boolean) => void
   onStartRenamingCategory: () => void
 }) {
   const effectiveCoverPath = category.coverShootPath || shoots[0]?.path
@@ -740,23 +904,23 @@ function CategoryShootSurface({
             <ShootCard
               key={shoot.path}
               canOrganize={canOrganize}
-              dropPosition={
+              isSwapTarget={
                 shootDropTarget?.shootPath === shoot.path &&
                 draggingShootPath !== shoot.path
-                  ? shootDropTarget.position
-                  : null
               }
               draggingShootPath={draggingShootPath}
               isAdminMode={isAdminMode}
               isBusy={isBusy}
               isCategoryCover={shoot.path === effectiveCoverPath}
               isPriority={index < 3}
+              isSelected={selectedShootPaths.has(shoot.path)}
               shoot={shoot}
               onDragEnd={onDragEnd}
               onSetCategoryCover={onSetCategoryCover}
               onShootDragOver={onShootDragOver}
               onShootDragStart={onShootDragStart}
               onShootDrop={onShootDrop}
+              onShootSelectionChange={onShootSelectionChange}
             />
           ))}
         </div>
@@ -932,33 +1096,76 @@ function DeleteCategoryDialog({
 
 function ShootCard({
   canOrganize,
-  dropPosition,
   draggingShootPath,
   isAdminMode,
   isBusy,
   isCategoryCover,
   isPriority,
+  isSelected,
+  isSwapTarget,
   shoot,
   onDragEnd,
   onSetCategoryCover,
   onShootDragOver,
   onShootDragStart,
   onShootDrop,
+  onShootSelectionChange,
 }: {
   canOrganize: boolean
-  dropPosition: ShootDropPosition | null
   draggingShootPath: string | null
   isAdminMode: boolean
   isBusy: boolean
   isCategoryCover: boolean
   isPriority: boolean
+  isSelected: boolean
+  isSwapTarget: boolean
   shoot: CloudinaryShootSummary
   onDragEnd: () => void
   onSetCategoryCover: (shootPath: string) => void
   onShootDragOver: (event: DragEvent<HTMLElement>, shootPath: string) => void
   onShootDragStart: (event: DragEvent<HTMLElement>, shootPath: string) => void
   onShootDrop: (event: DragEvent<HTMLElement>, shootPath: string) => void
+  onShootSelectionChange: (shootPath: string, selected?: boolean) => void
 }) {
+  const shootRouteParams = useMemo(
+    () => ({
+      category: toMediaRouteSegment(shoot.categoryName),
+      shoot: toMediaRouteSegment(shoot.name),
+    }),
+    [shoot.categoryName, shoot.name]
+  )
+
+  const shootPreview = (
+    <div className="relative aspect-[3/4]">
+      {shoot.cover ? (
+        <ProgressiveImage
+          src={shoot.cover.thumbnailUrl}
+          srcSet={shoot.cover.thumbnailSrcSet}
+          sizes={CARD_IMAGE_SIZES}
+          alt={shoot.name}
+          draggable={false}
+          className={cn(
+            "absolute inset-0 size-full object-cover transition duration-300",
+            isAdminMode && isSelected
+              ? "scale-[1.015] brightness-90"
+              : "group-hover:scale-[1.035]"
+          )}
+          {...getImageLoadingProps(isPriority)}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:42px_42px]" />
+      )}
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-3 py-2.5 text-white">
+        <h2 className="font-sans text-xs leading-tight font-semibold tracking-[0.12em] uppercase sm:text-sm">
+          {shoot.name}
+        </h2>
+        <p className="mt-0.5 text-[0.625rem] leading-tight font-medium tracking-[0.12em] text-white/70 uppercase sm:text-[0.6875rem]">
+          {shoot.assetCount} photos
+        </p>
+      </div>
+    </div>
+  )
+
   return (
     <article
       draggable={isAdminMode && canOrganize && !isBusy}
@@ -967,7 +1174,8 @@ function ShootCard({
         isAdminMode && canOrganize && !isBusy
           ? "cursor-grab active:cursor-grabbing"
           : "",
-        dropPosition ? "ring-2 ring-brand/70" : "",
+        isSwapTarget ? "ring-2 ring-brand/70" : "",
+        isAdminMode && isSelected ? "ring-2 ring-brand/70" : "",
         draggingShootPath === shoot.path
           ? "opacity-45 ring-2 ring-brand/50"
           : ""
@@ -977,69 +1185,238 @@ function ShootCard({
       onDrop={(event) => onShootDrop(event, shoot.path)}
       onDragEnd={onDragEnd}
     >
-      {dropPosition ? (
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-x-0 z-30 flex justify-center",
-            dropPosition === "before" ? "top-0" : "bottom-0"
-          )}
-        >
-          <div className="h-1 w-[calc(100%-1rem)] bg-brand shadow-[0_0_0_1px_hsl(var(--background)),0_0_18px_hsl(var(--brand)/0.6)]" />
-        </div>
+      {isSwapTarget ? (
+        <div className="pointer-events-none absolute inset-2 z-30 border-2 border-brand shadow-[0_0_0_1px_hsl(var(--background)),0_0_18px_hsl(var(--brand)/0.6)]" />
       ) : null}
       <Link
         to={getMediaShootRoute(isAdminMode)}
-        params={{
-          category: toMediaRouteSegment(shoot.categoryName),
-          shoot: toMediaRouteSegment(shoot.name),
-        }}
+        params={shootRouteParams}
+        draggable={isAdminMode && canOrganize && !isBusy}
         className="block w-full text-left ring-offset-background transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onDragStart={(event) => {
+          event.stopPropagation()
+
+          if (isAdminMode) {
+            onShootDragStart(event, shoot.path)
+          }
+        }}
+        onDragOver={(event) => {
+          event.stopPropagation()
+
+          if (isAdminMode) {
+            onShootDragOver(event, shoot.path)
+          }
+        }}
+        onDrop={(event) => {
+          event.stopPropagation()
+
+          if (isAdminMode) {
+            onShootDrop(event, shoot.path)
+          }
+        }}
+        onDragEnd={(event) => {
+          event.stopPropagation()
+
+          if (isAdminMode) {
+            onDragEnd()
+          }
+        }}
       >
-        <div className="relative aspect-[3/4]">
-          {shoot.cover ? (
-            <ProgressiveImage
-              src={shoot.cover.thumbnailUrl}
-              srcSet={shoot.cover.thumbnailSrcSet}
-              sizes={CARD_IMAGE_SIZES}
-              alt={shoot.name}
-              className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.035]"
-              {...getImageLoadingProps(isPriority)}
-            />
-          ) : (
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:42px_42px]" />
-          )}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-3 py-2.5 text-white">
-            <h2 className="font-sans text-xs leading-tight font-semibold tracking-[0.12em] uppercase sm:text-sm">
-              {shoot.name}
-            </h2>
-            <p className="mt-0.5 text-[0.625rem] leading-tight font-medium tracking-[0.12em] text-white/70 uppercase sm:text-[0.6875rem]">
-              {shoot.assetCount} photos
-            </p>
-          </div>
-        </div>
+        {shootPreview}
       </Link>
       {isAdminMode ? (
-        <Button
-          type="button"
-          variant={isCategoryCover ? "brand" : "secondary"}
-          size="sm"
-          className={cn(
-            "absolute right-3 bottom-3 z-20 h-8 px-2.5 text-xs shadow-sm backdrop-blur transition-opacity",
-            isCategoryCover
-              ? "opacity-100"
-              : "bg-background/90 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          )}
-          disabled={!canOrganize || isBusy}
-          onClick={(event) => {
-            event.stopPropagation()
-            onSetCategoryCover(shoot.path)
-          }}
-        >
-          <StarIcon data-icon="inline-start" />
-          Cover
-        </Button>
+        <>
+          <Checkbox
+            checked={isSelected}
+            disabled={isBusy}
+            aria-label={isSelected ? "Deselect shoot" : "Select shoot"}
+            className={cn(
+              "absolute top-3 left-3 z-20 size-5 border-background/80 bg-background/90 text-primary-foreground shadow-sm transition-opacity",
+              isSelected
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            )}
+            onClick={(event) => event.stopPropagation()}
+            onCheckedChange={(checked) =>
+              onShootSelectionChange(shoot.path, checked)
+            }
+          />
+          <Button
+            type="button"
+            variant={isCategoryCover ? "brand" : "secondary"}
+            size="sm"
+            className={cn(
+              "absolute right-3 bottom-3 z-20 h-8 px-2.5 text-xs shadow-sm backdrop-blur transition-opacity",
+              isCategoryCover
+                ? "opacity-100"
+                : "bg-background/90 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            )}
+            disabled={!canOrganize || isBusy}
+            onClick={(event) => {
+              event.stopPropagation()
+              onSetCategoryCover(shoot.path)
+            }}
+          >
+            <StarIcon data-icon="inline-start" />
+            Cover
+          </Button>
+        </>
       ) : null}
     </article>
+  )
+}
+
+function SelectedShootsActionBar({
+  availableTargetCategories,
+  canDelete,
+  canMove,
+  isBusy,
+  moveTargetCategoryPath,
+  selectedCount,
+  onClearSelection,
+  onDeleteSelected,
+  onMoveSelected,
+  onMoveTargetCategoryPathChange,
+}: {
+  availableTargetCategories: CloudinaryCategoryPage["categories"]
+  canDelete: boolean
+  canMove: boolean
+  isBusy: boolean
+  moveTargetCategoryPath: string
+  selectedCount: number
+  onClearSelection: () => void
+  onDeleteSelected: () => void
+  onMoveSelected: () => void
+  onMoveTargetCategoryPathChange: (categoryPath: string) => void
+}) {
+  return (
+    <div className="fixed inset-x-4 bottom-6 z-50 mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-3 border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+      <span className="min-w-0 text-sm font-medium">
+        {selectedCount} selected
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={isBusy}
+        onClick={onClearSelection}
+      >
+        Clear
+      </Button>
+      <Dialog>
+        <DialogTrigger
+          render={
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!canMove || isBusy}
+            />
+          }
+        >
+          <FolderInputIcon data-icon="inline-start" />
+          Move
+        </DialogTrigger>
+        <DialogContent>
+          <form
+            className="grid gap-5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              onMoveSelected()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Move selected shoots</DialogTitle>
+              <DialogDescription>
+                Choose the category that should receive {selectedCount} shoot
+                {selectedCount === 1 ? "" : "s"}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              <Label htmlFor="move-shoots-category">Category</Label>
+              <Select
+                value={moveTargetCategoryPath}
+                onValueChange={(value) => {
+                  if (value) {
+                    onMoveTargetCategoryPathChange(value)
+                  }
+                }}
+              >
+                <SelectTrigger
+                  id="move-shoots-category"
+                  className="w-full"
+                  disabled={!canMove || isBusy}
+                >
+                  <SelectValue placeholder="Choose category" />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {availableTargetCategories.map((category) => (
+                    <SelectItem key={category.path} value={category.path}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" />}>
+                Cancel
+              </DialogClose>
+              <Button
+                type="submit"
+                variant="brand"
+                disabled={!canMove || isBusy}
+              >
+                <FolderInputIcon data-icon="inline-start" />
+                Move shoots
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog>
+        <AlertDialogTrigger
+          render={
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={!canDelete || isBusy}
+            />
+          }
+        >
+          <Trash2Icon data-icon="inline-start" />
+          Delete
+        </AlertDialogTrigger>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Delete selected shoots?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selectedCount} selected shoot
+              {selectedCount === 1 ? "" : "s"} and all photos inside. This
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel variant="ghost" disabled={isBusy}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              disabled={!canDelete || isBusy}
+              onClick={onDeleteSelected}
+            >
+              <Trash2Icon data-icon="inline-start" />
+              Delete shoots
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   )
 }
 
@@ -1083,20 +1460,10 @@ function ConnectionNotice({
   )
 }
 
-function getShootDropPosition(
-  event: DragEvent<HTMLElement>
-): ShootDropPosition {
-  const bounds = event.currentTarget.getBoundingClientRect()
-  const midpoint = bounds.top + bounds.height / 2
-
-  return event.clientY < midpoint ? "before" : "after"
-}
-
-function moveShootToDropTarget(
+function swapShoots(
   shoots: CloudinaryShootSummary[],
   draggedShootPath: string,
-  targetShootPath: string,
-  dropPosition: ShootDropPosition
+  targetShootPath: string
 ) {
   const fromIndex = shoots.findIndex((shoot) => shoot.path === draggedShootPath)
   const toIndex = shoots.findIndex((shoot) => shoot.path === targetShootPath)
@@ -1106,31 +1473,15 @@ function moveShootToDropTarget(
   }
 
   const nextShoots = shoots.slice()
-  const [draggedShoot] = nextShoots.splice(fromIndex, 1)
+  const draggedShoot = nextShoots[fromIndex]
+  const targetShoot = nextShoots[toIndex]
 
-  if (!draggedShoot) {
+  if (!draggedShoot || !targetShoot) {
     return null
   }
 
-  const nextIndex = nextShoots.findIndex(
-    (shoot) => shoot.path === targetShootPath
-  )
-
-  if (nextIndex === -1) {
-    return null
-  }
-
-  const insertIndex = dropPosition === "after" ? nextIndex + 1 : nextIndex
-
-  nextShoots.splice(insertIndex, 0, draggedShoot)
-
-  const didChange = nextShoots.some(
-    (shoot, index) => shoot.path !== shoots[index]?.path
-  )
-
-  if (!didChange) {
-    return null
-  }
+  nextShoots[fromIndex] = targetShoot
+  nextShoots[toIndex] = draggedShoot
 
   return nextShoots
 }

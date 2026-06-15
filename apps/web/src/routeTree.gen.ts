@@ -14,6 +14,7 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as CategoryRouteImport } from './routes/$category'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminPricingRouteImport } from './routes/admin/pricing'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminLogoutRouteImport } from './routes/admin/logout'
@@ -51,6 +52,11 @@ const CategoryRoute = CategoryRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminPricingRoute = AdminPricingRouteImport.update({
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/admin/logout': typeof AdminLogoutRoute
   '/admin/media': typeof AdminMediaRouteWithChildren
   '/admin/pricing': typeof AdminPricingRoute
+  '/admin/': typeof AdminIndexRoute
   '/admin/$category/$shoot': typeof AdminCategoryShootRoute
   '/admin/media/$category': typeof AdminMediaCategoryRouteWithChildren
   '/api/cloudinary/upload': typeof ApiCloudinaryUploadRoute
@@ -154,6 +161,7 @@ export interface FileRoutesByTo {
   '/admin/logout': typeof AdminLogoutRoute
   '/admin/media': typeof AdminMediaRouteWithChildren
   '/admin/pricing': typeof AdminPricingRoute
+  '/admin': typeof AdminIndexRoute
   '/admin/$category/$shoot': typeof AdminCategoryShootRoute
   '/admin/media/$category': typeof AdminMediaCategoryRouteWithChildren
   '/api/cloudinary/upload': typeof ApiCloudinaryUploadRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/admin/logout': typeof AdminLogoutRoute
   '/admin/media': typeof AdminMediaRouteWithChildren
   '/admin/pricing': typeof AdminPricingRoute
+  '/admin/': typeof AdminIndexRoute
   '/admin/$category/$shoot': typeof AdminCategoryShootRoute
   '/admin/media/$category': typeof AdminMediaCategoryRouteWithChildren
   '/api/cloudinary/upload': typeof ApiCloudinaryUploadRoute
@@ -197,6 +206,7 @@ export interface FileRouteTypes {
     | '/admin/logout'
     | '/admin/media'
     | '/admin/pricing'
+    | '/admin/'
     | '/admin/$category/$shoot'
     | '/admin/media/$category'
     | '/api/cloudinary/upload'
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/admin/logout'
     | '/admin/media'
     | '/admin/pricing'
+    | '/admin'
     | '/admin/$category/$shoot'
     | '/admin/media/$category'
     | '/api/cloudinary/upload'
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '/admin/logout'
     | '/admin/media'
     | '/admin/pricing'
+    | '/admin/'
     | '/admin/$category/$shoot'
     | '/admin/media/$category'
     | '/api/cloudinary/upload'
@@ -257,6 +269,7 @@ export interface RootRouteChildren {
   AdminLogoutRoute: typeof AdminLogoutRoute
   AdminMediaRoute: typeof AdminMediaRouteWithChildren
   AdminPricingRoute: typeof AdminPricingRoute
+  AdminIndexRoute: typeof AdminIndexRoute
   ApiCloudinaryUploadRoute: typeof ApiCloudinaryUploadRoute
 }
 
@@ -295,6 +308,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/pricing': {
@@ -452,6 +472,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLogoutRoute: AdminLogoutRoute,
   AdminMediaRoute: AdminMediaRouteWithChildren,
   AdminPricingRoute: AdminPricingRoute,
+  AdminIndexRoute: AdminIndexRoute,
   ApiCloudinaryUploadRoute: ApiCloudinaryUploadRoute,
 }
 export const routeTree = rootRouteImport

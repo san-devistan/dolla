@@ -74,7 +74,7 @@ function MobileStaticNavLink({
     | "/about"
     | "/pricing"
     | "/contact"
-    | "/admin/home"
+    | "/admin"
     | "/admin/about"
     | "/admin/pricing"
     | "/admin/contact"
