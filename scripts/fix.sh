@@ -39,9 +39,23 @@ run cleanup_js_mirrors
 run pnpm exec oxfmt .
 run pnpm exec oxlint --fix .
 run node scripts/oxc-check.mjs
-run pnpm dlx react-doctor@latest --yes --offline --verbose --no-dead-code --project mobile,web --fail-on none .
+
+react_doctor_projects=()
+if [[ -d apps/mobile ]]; then
+  react_doctor_projects+=("mobile")
+fi
+if [[ -d apps/web ]]; then
+  react_doctor_projects+=("web")
+fi
+if (( ${#react_doctor_projects[@]} > 0 )); then
+  react_doctor_project_arg="$(IFS=,; printf "%s" "${react_doctor_projects[*]}")"
+  run pnpm dlx react-doctor@latest --yes --offline --verbose --no-dead-code --project "$react_doctor_project_arg" --fail-on none .
+fi
+
 run_in packages/backend pnpm exec tsc --noEmit
 run_in packages/ui pnpm exec tsc --noEmit
-run_in apps/mobile pnpm exec tsc --noEmit
+if [[ -d apps/mobile ]]; then
+  run_in apps/mobile pnpm exec tsc --noEmit
+fi
 run_in apps/web pnpm exec tsc --noEmit
 run pnpm exec turbo build

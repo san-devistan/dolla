@@ -9,6 +9,7 @@ import path from "node:path"
 const CLOUDINARY_ROOT_FOLDER = "Dolla"
 const FORBIDDEN_FOLDER_CHARS = /[?&#\\%<>+]/
 const DELETE_ASSET_BATCH_SIZE = 100
+const HOME_LATEST_ASSET_LIMIT = 42
 
 type LocalEnv = Record<string, string>
 
@@ -105,6 +106,7 @@ type CloudinaryAsset = {
   layoutColumn?: number
   layoutOrder?: number
   layoutColumnCount?: number
+  homeCarouselOrderRank?: number
 }
 
 type CloudinaryAssetLayout = {
@@ -124,6 +126,7 @@ type AboutContentBlock = {
 type PricingItem = {
   id: string
   name: string
+  description: string
   price: string
 }
 
@@ -234,6 +237,7 @@ type ConvexAssetView = {
   layoutColumn: number | null
   layoutOrder: number | null
   layoutColumnCount: number | null
+  homeCarouselOrderRank: number | null
 }
 
 type ConvexCategorySummaryView = {
@@ -470,6 +474,7 @@ function parsePricingItemBlock(block: AboutContentBlock) {
     }
 
     const name = readString(parsed, "name")?.trim() ?? ""
+    const description = readString(parsed, "description")?.trim() ?? ""
     const price = readString(parsed, "price")?.trim() ?? ""
 
     if (!name || !price) {
@@ -480,6 +485,7 @@ function parsePricingItemBlock(block: AboutContentBlock) {
       {
         id: block.id,
         name,
+        description,
         price,
       },
     ]
@@ -494,6 +500,7 @@ function getPricingContentBlocks(items: PricingItem[]) {
     kind: "paragraph" as const,
     text: JSON.stringify({
       name: item.name,
+      description: item.description,
       price: item.price,
     }),
     bold: false,
@@ -503,6 +510,7 @@ function getPricingContentBlocks(items: PricingItem[]) {
 function normalizePricingItems(items: PricingItem[]) {
   return items.flatMap((item, index) => {
     const name = item.name.trim()
+    const description = item.description.trim()
     const price = item.price.trim()
 
     if (!name || !price) {
@@ -513,6 +521,7 @@ function normalizePricingItems(items: PricingItem[]) {
       {
         id: item.id.trim() || getPricingItemId(index, name),
         name,
+        description,
         price,
       },
     ]
@@ -1030,6 +1039,7 @@ function mapConvexAsset(asset: ConvexAssetView): CloudinaryAsset {
     layoutColumn: asset.layoutColumn ?? undefined,
     layoutOrder: asset.layoutOrder ?? undefined,
     layoutColumnCount: asset.layoutColumnCount ?? undefined,
+    homeCarouselOrderRank: asset.homeCarouselOrderRank ?? undefined,
   }
 }
 
@@ -1119,6 +1129,43 @@ async function syncCloudinaryMetadata({
     markMissingFolders,
     assetFolderPaths,
     syncedAt: Date.now(),
+  })
+}
+
+function getShootFolderPaths(folders: CloudinaryFolder[]) {
+  return folders
+    .filter((folder) => folder.kind === "shoot")
+    .map((folder) => folder.path)
+}
+
+async function searchDollaShootAssets(folders: CloudinaryFolder[]) {
+  const shootFolderPaths = getShootFolderPaths(folders)
+
+  if (shootFolderPaths.length === 0) {
+    return []
+  }
+
+  return await searchAssetsInFolders({
+    folderPaths: shootFolderPaths,
+    imageOnly: true,
+  })
+}
+
+async function syncCloudinaryCatalog({
+  assets,
+  client,
+  folders,
+}: {
+  assets: CloudinaryAsset[]
+  client: ConvexMediaClient
+  folders: CloudinaryFolder[]
+}) {
+  await syncCloudinaryMetadata({
+    client,
+    folders,
+    assets,
+    markMissingFolders: true,
+    assetFolderPaths: getShootFolderPaths(folders),
   })
 }
 
@@ -1801,16 +1848,10 @@ async function getCloudinaryHome(
     configureCloudinary()
 
     const folders = await searchDollaFolders()
-    const latestAssets = await searchAssetsInFolders({
-      folderPaths: folders.map((folder) => folder.path),
-      imageOnly: true,
-      maxResults: 42,
-    })
+    const syncedAssets = await searchDollaShootAssets(folders)
+    const latestAssets = syncedAssets.slice(0, HOME_LATEST_ASSET_LIMIT)
     const categoryFolders = folders.filter((folder) => folder.depth === 1)
     const categories = categoryFolders.map((folder) => {
-      const categoryAssets = latestAssets.filter((asset) =>
-        isSameOrChildFolder(asset.folder, folder.path)
-      )
       const shootCount = new Set(
         folders
           .filter((candidate) => candidate.parentPath === folder.path)
@@ -1821,7 +1862,7 @@ async function getCloudinaryHome(
         name: folder.name,
         path: folder.path,
         orderRank: folder.orderRank,
-        cover: categoryAssets[0],
+        cover: findCategoryCoverAsset(syncedAssets, folder.path),
         shootCount,
       }
     })
@@ -1840,11 +1881,10 @@ async function getCloudinaryHome(
     }
 
     try {
-      await syncCloudinaryMetadata({
+      await syncCloudinaryCatalog({
         client: convexClient,
         folders,
-        assets: latestAssets,
-        markMissingFolders: true,
+        assets: syncedAssets,
       })
 
       return await readSyncedHome({
@@ -1941,9 +1981,6 @@ function getCategorySummaries(
   return folders
     .filter((folder) => folder.kind === "category")
     .map((folder) => {
-      const categoryAssets = latestAssets.filter((asset) =>
-        isSameOrChildFolder(asset.folder, folder.path)
-      )
       const shootCount = folders.filter(
         (candidate) => candidate.parentPath === folder.path
       ).length
@@ -1952,7 +1989,7 @@ function getCategorySummaries(
         name: folder.name,
         path: folder.path,
         orderRank: folder.orderRank,
-        cover: categoryAssets[0],
+        cover: findCategoryCoverAsset(latestAssets, folder.path),
         shootCount,
       }
     })
@@ -1976,6 +2013,53 @@ function getShootSummaries({
       assetCount: shootAssets.length,
     } satisfies CloudinaryShootSummary
   })
+}
+
+function findCategoryCoverAsset(
+  assets: CloudinaryAsset[],
+  categoryPath: string
+) {
+  return assets.find((asset) => isSameOrChildFolder(asset.folder, categoryPath))
+}
+
+function getCategoryShootFolders(
+  folders: CloudinaryFolder[],
+  category: CloudinaryFolder | undefined
+) {
+  if (!category) {
+    return []
+  }
+
+  return folders.filter(
+    (folder) => folder.kind === "shoot" && folder.parentPath === category.path
+  )
+}
+
+function getShootSelection({
+  categoryName,
+  folders,
+  shootName,
+}: {
+  categoryName: string
+  folders: CloudinaryFolder[]
+  shootName: string
+}) {
+  const category = findCategoryFolderByRouteSegment(folders, categoryName)
+  const categoryPath = category?.path || buildCategoryFolderPath(categoryName)
+  const shoot = category
+    ? findShootFolderByRouteSegment({
+        category,
+        folders,
+        shootRouteSegment: shootName,
+      })
+    : undefined
+  const shootPath =
+    shoot?.path ||
+    (category
+      ? buildShootFolderPathForCategoryPath(category.path, shootName)
+      : buildShootFolderPath(categoryName, shootName))
+
+  return { category, categoryPath, shoot, shootPath }
 }
 
 async function getCloudinaryCategory(
@@ -2009,32 +2093,19 @@ async function getCloudinaryCategory(
     const folders = await searchDollaFolders()
     const category = findCategoryFolderByRouteSegment(folders, categoryName)
     const categoryPath = category?.path || buildCategoryFolderPath(categoryName)
-    const shoots = category
-      ? folders.filter(
-          (folder) =>
-            folder.kind === "shoot" && folder.parentPath === category.path
+    const shoots = getCategoryShootFolders(folders, category)
+    const syncedAssets = await searchDollaShootAssets(folders)
+    const categoryAssets = category
+      ? syncedAssets.filter((asset) =>
+          isSameOrChildFolder(asset.folder, category.path)
         )
       : []
-    const [latestAssets, categoryAssets] = await Promise.all([
-      searchAssetsInFolders({
-        folderPaths: folders.map((folder) => folder.path),
-        imageOnly: true,
-        maxResults: 500,
-      }),
-      shoots.length > 0
-        ? searchAssetsInFolders({
-            folderPaths: shoots.map((shoot) => shoot.path),
-            imageOnly: true,
-            maxResults: 500,
-          })
-        : Promise.resolve([]),
-    ])
 
     const directCategoryPage = {
       connection: connectionState,
       rootFolder: CLOUDINARY_ROOT_FOLDER,
       category,
-      categories: getCategorySummaries(folders, latestAssets),
+      categories: getCategorySummaries(folders, syncedAssets),
       shoots: getShootSummaries({ assets: categoryAssets, shoots }),
     } satisfies CloudinaryCategoryPage
     const convexClient = getConvexMediaClient()
@@ -2044,11 +2115,10 @@ async function getCloudinaryCategory(
     }
 
     try {
-      await syncCloudinaryMetadata({
+      await syncCloudinaryCatalog({
         client: convexClient,
         folders,
-        assets: dedupeAssets([...latestAssets, ...categoryAssets]),
-        markMissingFolders: true,
+        assets: syncedAssets,
       })
 
       return await readSyncedCategory({
@@ -2109,41 +2179,22 @@ async function getCloudinaryShoot(
     configureCloudinary()
 
     const folders = await searchDollaFolders()
-    const category = findCategoryFolderByRouteSegment(folders, categoryName)
-    const categoryPath = category?.path || buildCategoryFolderPath(categoryName)
-    const shoot = category
-      ? findShootFolderByRouteSegment({
-          category,
-          folders,
-          shootRouteSegment: shootName,
-        })
-      : undefined
-    const shootPath =
-      shoot?.path ||
-      (category
-        ? buildShootFolderPathForCategoryPath(category.path, shootName)
-        : buildShootFolderPath(categoryName, shootName))
-    const [latestAssets, assets] = await Promise.all([
-      searchAssetsInFolders({
-        folderPaths: folders.map((folder) => folder.path),
-        imageOnly: true,
-        maxResults: 500,
-      }),
-      shoot
-        ? searchAssetsInFolders({
-            folderPaths: [shoot.path],
-            imageOnly: true,
-            maxResults: 500,
-          })
-        : Promise.resolve([]),
-    ])
+    const { category, categoryPath, shoot, shootPath } = getShootSelection({
+      categoryName,
+      folders,
+      shootName,
+    })
+    const syncedAssets = await searchDollaShootAssets(folders)
+    const assets = shoot
+      ? syncedAssets.filter((asset) => asset.folder === shoot.path)
+      : []
 
     const directShootPage = {
       connection: connectionState,
       rootFolder: CLOUDINARY_ROOT_FOLDER,
       category,
       shoot,
-      categories: getCategorySummaries(folders, latestAssets),
+      categories: getCategorySummaries(folders, syncedAssets),
       assets,
     } satisfies CloudinaryShootPage
     const convexClient = getConvexMediaClient()
@@ -2153,12 +2204,10 @@ async function getCloudinaryShoot(
     }
 
     try {
-      await syncCloudinaryMetadata({
+      await syncCloudinaryCatalog({
         client: convexClient,
         folders,
-        assets: dedupeAssets([...latestAssets, ...assets]),
-        markMissingFolders: true,
-        assetFolderPaths: shoot ? [shoot.path] : [],
+        assets: syncedAssets,
       })
 
       return await readSyncedShoot({
@@ -2499,6 +2548,23 @@ async function setCloudinaryShootCover({
   return null
 }
 
+async function setCloudinaryHomeCarouselAsset({
+  assetId,
+  selected,
+}: {
+  assetId: string
+  selected: boolean
+}) {
+  const client = getRequiredConvexMediaClient()
+
+  await client.mutation(api.media.setHomeCarouselAsset, {
+    assetId,
+    selected,
+  })
+
+  return null
+}
+
 async function setCloudinaryShootCredits({
   shootPath,
   credits,
@@ -2590,6 +2656,7 @@ export {
   reorderCloudinaryShoots,
   setCloudinaryAboutContent,
   setCloudinaryCategoryCover,
+  setCloudinaryHomeCarouselAsset,
   setCloudinaryPricingItems,
   setCloudinaryShootCredits,
   setCloudinaryShootCover,

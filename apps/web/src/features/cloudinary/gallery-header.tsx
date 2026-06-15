@@ -1,17 +1,14 @@
 import { MobileGalleryHeader } from "@/features/cloudinary/mobile-gallery-header"
 import {
-  ADMIN_LOGOUT_ROUTE,
   getAboutRoute,
   getContactRoute,
   getMediaCategoryRoute,
   getMediaHomeRoute,
   getPricingRoute,
-  getPublicPathForAdminPath,
 } from "@/lib/admin-routes"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import { Link, useRouterState } from "@tanstack/react-router"
 import { Badge } from "@workspace/ui/components/badge"
-import { buttonVariants } from "@workspace/ui/components/button"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { cn } from "@workspace/ui/lib/utils"
 import { useCallback, useMemo } from "react"
@@ -96,33 +93,13 @@ function DesktopGalleryHeader<TCategory extends GalleryCategory>({
         )}
       >
         {isAdminMode ? (
-          <div className="flex min-w-max items-center justify-end gap-3 justify-self-end lg:col-start-3 lg:row-start-1">
+          <div className="flex min-w-max items-center justify-end justify-self-end lg:col-start-3 lg:row-start-1">
             <Badge
               variant="outline"
-              className="border border-border px-3 py-2 text-[0.625rem] text-foreground"
+              className="border border-destructive bg-destructive px-3 py-2 text-[0.625rem] text-background shadow-sm shadow-destructive/25"
             >
               Admin view
             </Badge>
-            <a
-              href={getPublicPathForAdminPath(currentPathname)}
-              className={buttonVariants({
-                variant: "ghost",
-                size: "sm",
-                className: "font-black tracking-[0.22em]",
-              })}
-            >
-              Public view
-            </a>
-            <a
-              href={ADMIN_LOGOUT_ROUTE}
-              className={buttonVariants({
-                variant: "outline",
-                size: "sm",
-                className: "font-black tracking-[0.22em]",
-              })}
-            >
-              Sign out
-            </a>
           </div>
         ) : null}
         <Link

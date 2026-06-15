@@ -12,6 +12,7 @@ const ORDER_STEP = 1000
 const MAX_CATEGORIES = 100
 const MAX_SHOOTS = 500
 const MAX_ASSETS = 800
+const MAX_HOME_CAROUSEL_ASSETS = 24
 const MAX_SHOOT_CREDITS_LENGTH = 2000
 const MAX_SITE_CONTENT_BLOCKS = 40
 const MAX_SITE_CONTENT_TEXT_LENGTH = 12_000
@@ -143,6 +144,7 @@ type MediaAsset = SystemFields<"mediaAssets"> & {
   layoutColumn?: number
   layoutOrder?: number
   layoutColumnCount?: number
+  homeCarouselOrderRank?: number
   syncedAt: number
   deletedAt: number | null
 }
@@ -277,18 +279,25 @@ export const getLibrary = query({
 export const getHome = query({
   args: {},
   handler: async (ctx) => {
-    const categories = await listActiveCategories(ctx)
-    const latestAssets = await ctx.db
-      .query("mediaAssets")
-      .withIndex("by_deletedAt_and_createdAt", (q) => q.eq("deletedAt", null))
-      .order("desc")
-      .take(42)
+    const [categories, latestAssets, homeCarouselAssets] = await Promise.all([
+      listActiveCategories(ctx),
+      ctx.db
+        .query("mediaAssets")
+        .withIndex("by_deletedAt_and_createdAt", (q) => q.eq("deletedAt", null))
+        .order("desc")
+        .take(42),
+      listActiveHomeCarouselAssets(ctx),
+    ])
     const categorySummaries = await buildCategorySummaries(ctx, categories)
+    const heroAssets =
+      homeCarouselAssets.length > 0
+        ? homeCarouselAssets
+        : latestAssets.slice(0, 7)
 
     return {
       rootFolder: ROOT_FOLDER,
       categories: categorySummaries,
-      heroAssets: latestAssets.slice(0, 7).map(assetView),
+      heroAssets: heroAssets.map(assetView),
       latestAssets: latestAssets.map(assetView),
     }
   },
@@ -415,6 +424,36 @@ export const setShootCover = mutation({
     }
 
     await ctx.db.patch(shoot._id, { coverAssetId: args.assetId })
+
+    return null
+  },
+})
+
+export const setHomeCarouselAsset = mutation({
+  args: {
+    assetId: v.string(),
+    selected: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const asset = await getActiveAssetByCloudinaryAssetId(ctx, args.assetId)
+
+    if (!asset) {
+      throw new Error("Photo not found.")
+    }
+
+    if (!args.selected) {
+      await ctx.db.patch(asset._id, { homeCarouselOrderRank: 0 })
+
+      return null
+    }
+
+    if (asset.homeCarouselOrderRank && asset.homeCarouselOrderRank > 0) {
+      return null
+    }
+
+    await ctx.db.patch(asset._id, {
+      homeCarouselOrderRank: await getNextHomeCarouselAssetRank(ctx),
+    })
 
     return null
   },
@@ -1022,6 +1061,28 @@ async function listActiveAssetsForShoot(
     .take(limit)
 }
 
+async function listActiveHomeCarouselAssets(ctx: QueryCtx | MutationCtx) {
+  return await ctx.db
+    .query("mediaAssets")
+    .withIndex("by_deletedAt_and_homeCarouselOrderRank", (q) =>
+      q.eq("deletedAt", null).gt("homeCarouselOrderRank", 0)
+    )
+    .order("asc")
+    .take(MAX_HOME_CAROUSEL_ASSETS)
+}
+
+async function getNextHomeCarouselAssetRank(ctx: MutationCtx) {
+  const assets = await ctx.db
+    .query("mediaAssets")
+    .withIndex("by_deletedAt_and_homeCarouselOrderRank", (q) =>
+      q.eq("deletedAt", null).gt("homeCarouselOrderRank", 0)
+    )
+    .order("desc")
+    .take(1)
+
+  return (assets[0]?.homeCarouselOrderRank || 0) + ORDER_STEP
+}
+
 async function getCategoryByPath(ctx: MutationCtx, path: string) {
   return await ctx.db
     .query("mediaCategories")
@@ -1164,6 +1225,7 @@ function assetView(asset: MediaAsset) {
     layoutColumn: asset.layoutColumn ?? null,
     layoutOrder: asset.layoutOrder ?? null,
     layoutColumnCount: asset.layoutColumnCount ?? null,
+    homeCarouselOrderRank: asset.homeCarouselOrderRank ?? null,
   }
 }
 

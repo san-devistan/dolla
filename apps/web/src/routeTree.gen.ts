@@ -18,6 +18,7 @@ import { Route as AdminPricingRouteImport } from './routes/admin/pricing'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminLogoutRouteImport } from './routes/admin/logout'
 import { Route as AdminLoginRouteImport } from './routes/admin/login'
+import { Route as AdminHomeRouteImport } from './routes/admin/home'
 import { Route as AdminContactRouteImport } from './routes/admin/contact'
 import { Route as AdminAboutRouteImport } from './routes/admin/about'
 import { Route as AdminCategoryRouteImport } from './routes/admin/$category'
@@ -72,6 +73,11 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   path: '/admin/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminHomeRoute = AdminHomeRouteImport.update({
+  id: '/admin/home',
+  path: '/admin/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminContactRoute = AdminContactRouteImport.update({
   id: '/admin/contact',
   path: '/admin/contact',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/admin/$category': typeof AdminCategoryRouteWithChildren
   '/admin/about': typeof AdminAboutRoute
   '/admin/contact': typeof AdminContactRoute
+  '/admin/home': typeof AdminHomeRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/logout': typeof AdminLogoutRoute
   '/admin/media': typeof AdminMediaRouteWithChildren
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/admin/$category': typeof AdminCategoryRouteWithChildren
   '/admin/about': typeof AdminAboutRoute
   '/admin/contact': typeof AdminContactRoute
+  '/admin/home': typeof AdminHomeRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/logout': typeof AdminLogoutRoute
   '/admin/media': typeof AdminMediaRouteWithChildren
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/admin/$category': typeof AdminCategoryRouteWithChildren
   '/admin/about': typeof AdminAboutRoute
   '/admin/contact': typeof AdminContactRoute
+  '/admin/home': typeof AdminHomeRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/logout': typeof AdminLogoutRoute
   '/admin/media': typeof AdminMediaRouteWithChildren
@@ -183,6 +192,7 @@ export interface FileRouteTypes {
     | '/admin/$category'
     | '/admin/about'
     | '/admin/contact'
+    | '/admin/home'
     | '/admin/login'
     | '/admin/logout'
     | '/admin/media'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/admin/$category'
     | '/admin/about'
     | '/admin/contact'
+    | '/admin/home'
     | '/admin/login'
     | '/admin/logout'
     | '/admin/media'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/admin/$category'
     | '/admin/about'
     | '/admin/contact'
+    | '/admin/home'
     | '/admin/login'
     | '/admin/logout'
     | '/admin/media'
@@ -240,6 +252,7 @@ export interface RootRouteChildren {
   AdminCategoryRoute: typeof AdminCategoryRouteWithChildren
   AdminAboutRoute: typeof AdminAboutRoute
   AdminContactRoute: typeof AdminContactRoute
+  AdminHomeRoute: typeof AdminHomeRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminLogoutRoute: typeof AdminLogoutRoute
   AdminMediaRoute: typeof AdminMediaRouteWithChildren
@@ -310,6 +323,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/login'
       fullPath: '/admin/login'
       preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/home': {
+      id: '/admin/home'
+      path: '/admin/home'
+      fullPath: '/admin/home'
+      preLoaderRoute: typeof AdminHomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/contact': {
@@ -427,6 +447,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCategoryRoute: AdminCategoryRouteWithChildren,
   AdminAboutRoute: AdminAboutRoute,
   AdminContactRoute: AdminContactRoute,
+  AdminHomeRoute: AdminHomeRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminLogoutRoute: AdminLogoutRoute,
   AdminMediaRoute: AdminMediaRouteWithChildren,

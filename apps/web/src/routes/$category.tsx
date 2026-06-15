@@ -45,7 +45,6 @@ import {
   AlertDialogTrigger,
 } from "@workspace/ui/components/alert-dialog"
 import { Button } from "@workspace/ui/components/button"
-import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
   Dialog,
   DialogClose,
@@ -65,7 +64,6 @@ import {
   CheckIcon,
   PencilIcon,
   PlusIcon,
-  RefreshCwIcon,
   StarIcon,
   Trash2Icon,
   XIcon,
@@ -129,9 +127,6 @@ function CategoryPage({
     initialCategoryPage.category?.name || ""
   )
   const [isRenamingCategory, setIsRenamingCategory] = useState(false)
-  const [selectedShootPaths, setSelectedShootPaths] = useState<Set<string>>(
-    () => new Set()
-  )
   const [draggingShootPath, setDraggingShootPath] = useState<string | null>(
     null
   )
@@ -160,23 +155,9 @@ function CategoryPage({
     setCategoryPage(initialCategoryPage)
     setRenameName(initialCategoryPage.category?.name || "")
     setIsRenamingCategory(false)
-    setSelectedShootPaths(new Set())
     setDraggingShootPath(null)
     setShootDropTarget(null)
   }, [initialCategoryPage])
-
-  function refreshCategory() {
-    void runCategoryAction(
-      () =>
-        getCategory({
-          data: {
-            categoryName: selectedCategory?.name || category,
-            refresh: true,
-          },
-        }),
-      "Media refreshed"
-    )
-  }
 
   function handleCreateShootDialogOpenChange(open: boolean) {
     setIsCreateShootDialogOpen(open)
@@ -474,25 +455,6 @@ function CategoryPage({
     setShootDropTarget(null)
   }
 
-  function toggleShootSelection(shootPath: string, selected?: boolean) {
-    setSelectedShootPaths((currentShootPaths) => {
-      const nextShootPaths = new Set(currentShootPaths)
-      const shouldSelect = selected ?? !nextShootPaths.has(shootPath)
-
-      if (shouldSelect) {
-        nextShootPaths.add(shootPath)
-      } else {
-        nextShootPaths.delete(shootPath)
-      }
-
-      return nextShootPaths
-    })
-  }
-
-  function clearShootSelection() {
-    setSelectedShootPaths(new Set())
-  }
-
   function saveShootOrder(nextShoots: CloudinaryShootSummary[]) {
     if (!selectedCategory || !canOrganizeShoots) {
       return
@@ -589,25 +551,21 @@ function CategoryPage({
           isCreateShootDialogOpen={isCreateShootDialogOpen}
           isRenamingCategory={isRenamingCategory}
           renameName={renameName}
-          selectedShootPaths={selectedShootPaths}
           shootDropTarget={shootDropTarget}
           shoots={shoots}
           onCancelRenamingCategory={cancelRenamingCategory}
-          onClearShootSelection={clearShootSelection}
           onCreateShoot={handleCreateShoot}
           onCreateShootDialogOpenChange={handleCreateShootDialogOpenChange}
           onCreateShootFilesChange={handleCreateShootFilesChange}
           onCreateShootNameChange={setCreateShootName}
           onDeleteCategory={handleDeleteCategory}
           onDragEnd={handleShootDragEnd}
-          onRefresh={refreshCategory}
           onRenameCategory={handleRenameCategory}
           onRenameNameChange={setRenameName}
           onSetCategoryCover={handleSetCategoryCover}
           onShootDragOver={handleShootDragOver}
           onShootDragStart={handleShootDragStart}
           onShootDrop={handleShootDrop}
-          onShootSelectionChange={toggleShootSelection}
           onStartRenamingCategory={startRenamingCategory}
         />
       ) : (
@@ -634,25 +592,21 @@ function CategoryShootSurface({
   isCreateShootDialogOpen,
   isRenamingCategory,
   renameName,
-  selectedShootPaths,
   shootDropTarget,
   shoots,
   onCancelRenamingCategory,
-  onClearShootSelection,
   onCreateShoot,
   onCreateShootDialogOpenChange,
   onCreateShootFilesChange,
   onCreateShootNameChange,
   onDeleteCategory,
   onDragEnd,
-  onRefresh,
   onRenameCategory,
   onRenameNameChange,
   onSetCategoryCover,
   onShootDragOver,
   onShootDragStart,
   onShootDrop,
-  onShootSelectionChange,
   onStartRenamingCategory,
 }: {
   canCreateShoot: boolean
@@ -669,25 +623,21 @@ function CategoryShootSurface({
   isCreateShootDialogOpen: boolean
   isRenamingCategory: boolean
   renameName: string
-  selectedShootPaths: Set<string>
   shootDropTarget: ShootDropTarget | null
   shoots: CloudinaryShootSummary[]
   onCancelRenamingCategory: () => void
-  onClearShootSelection: () => void
   onCreateShoot: (event: FormEvent<HTMLFormElement>) => void
   onCreateShootDialogOpenChange: (open: boolean) => void
   onCreateShootFilesChange: (event: ChangeEvent<HTMLInputElement>) => void
   onCreateShootNameChange: (name: string) => void
   onDeleteCategory: () => void
   onDragEnd: () => void
-  onRefresh: () => void
   onRenameCategory: (event: FormEvent<HTMLFormElement>) => void
   onRenameNameChange: (name: string) => void
   onSetCategoryCover: (shootPath: string) => void
   onShootDragOver: (event: DragEvent<HTMLElement>, shootPath: string) => void
   onShootDragStart: (event: DragEvent<HTMLElement>, shootPath: string) => void
   onShootDrop: (event: DragEvent<HTMLElement>, shootPath: string) => void
-  onShootSelectionChange: (shootPath: string, selected?: boolean) => void
   onStartRenamingCategory: () => void
 }) {
   const effectiveCoverPath = category.coverShootPath || shoots[0]?.path
@@ -754,16 +704,6 @@ function CategoryShootSurface({
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              disabled={isBusy}
-              onClick={onRefresh}
-            >
-              <RefreshCwIcon data-icon="inline-start" />
-              Refresh
-            </Button>
-            <Button
-              type="button"
               variant={isRenamingCategory ? "secondary" : "outline"}
               size="icon-sm"
               disabled={!canRenameCategory || isBusy}
@@ -811,22 +751,14 @@ function CategoryShootSurface({
               isBusy={isBusy}
               isCategoryCover={shoot.path === effectiveCoverPath}
               isPriority={index < 3}
-              isSelected={selectedShootPaths.has(shoot.path)}
               shoot={shoot}
               onDragEnd={onDragEnd}
               onSetCategoryCover={onSetCategoryCover}
               onShootDragOver={onShootDragOver}
               onShootDragStart={onShootDragStart}
               onShootDrop={onShootDrop}
-              onShootSelectionChange={onShootSelectionChange}
             />
           ))}
-          {isAdminMode && selectedShootPaths.size > 0 ? (
-            <SelectedShootsActionBar
-              selectedCount={selectedShootPaths.size}
-              onClearSelection={onClearShootSelection}
-            />
-          ) : null}
         </div>
       ) : (
         <p className="py-16 text-sm text-muted-foreground">
@@ -1006,14 +938,12 @@ function ShootCard({
   isBusy,
   isCategoryCover,
   isPriority,
-  isSelected,
   shoot,
   onDragEnd,
   onSetCategoryCover,
   onShootDragOver,
   onShootDragStart,
   onShootDrop,
-  onShootSelectionChange,
 }: {
   canOrganize: boolean
   dropPosition: ShootDropPosition | null
@@ -1022,14 +952,12 @@ function ShootCard({
   isBusy: boolean
   isCategoryCover: boolean
   isPriority: boolean
-  isSelected: boolean
   shoot: CloudinaryShootSummary
   onDragEnd: () => void
   onSetCategoryCover: (shootPath: string) => void
   onShootDragOver: (event: DragEvent<HTMLElement>, shootPath: string) => void
   onShootDragStart: (event: DragEvent<HTMLElement>, shootPath: string) => void
   onShootDrop: (event: DragEvent<HTMLElement>, shootPath: string) => void
-  onShootSelectionChange: (shootPath: string, selected?: boolean) => void
 }) {
   return (
     <article
@@ -1042,8 +970,7 @@ function ShootCard({
         dropPosition ? "ring-2 ring-brand/70" : "",
         draggingShootPath === shoot.path
           ? "opacity-45 ring-2 ring-brand/50"
-          : "",
-        isSelected ? "ring-2 ring-brand/70" : ""
+          : ""
       )}
       onDragStart={(event) => onShootDragStart(event, shoot.path)}
       onDragOver={(event) => onShootDragOver(event, shoot.path)}
@@ -1092,68 +1019,27 @@ function ShootCard({
         </div>
       </Link>
       {isAdminMode ? (
-        <>
-          <Checkbox
-            checked={isSelected}
-            disabled={isBusy}
-            aria-label={isSelected ? "Deselect shoot" : "Select shoot"}
-            className={cn(
-              "absolute top-3 left-3 z-20 size-5 border-background/80 bg-background/90 text-primary-foreground shadow-sm transition-opacity",
-              isSelected
-                ? "opacity-100"
-                : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-            )}
-            onClick={(event) => event.stopPropagation()}
-            onCheckedChange={(checked) =>
-              onShootSelectionChange(shoot.path, checked)
-            }
-          />
-          <Button
-            type="button"
-            variant={isCategoryCover ? "brand" : "secondary"}
-            size="sm"
-            className={cn(
-              "absolute right-3 bottom-3 z-20 h-8 px-2.5 text-xs shadow-sm backdrop-blur transition-opacity",
-              isCategoryCover
-                ? "opacity-100"
-                : "bg-background/90 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-            )}
-            disabled={!canOrganize || isBusy}
-            onClick={(event) => {
-              event.stopPropagation()
-              onSetCategoryCover(shoot.path)
-            }}
-          >
-            <StarIcon data-icon="inline-start" />
-            Cover
-          </Button>
-        </>
+        <Button
+          type="button"
+          variant={isCategoryCover ? "brand" : "secondary"}
+          size="sm"
+          className={cn(
+            "absolute right-3 bottom-3 z-20 h-8 px-2.5 text-xs shadow-sm backdrop-blur transition-opacity",
+            isCategoryCover
+              ? "opacity-100"
+              : "bg-background/90 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          )}
+          disabled={!canOrganize || isBusy}
+          onClick={(event) => {
+            event.stopPropagation()
+            onSetCategoryCover(shoot.path)
+          }}
+        >
+          <StarIcon data-icon="inline-start" />
+          Cover
+        </Button>
       ) : null}
     </article>
-  )
-}
-
-function SelectedShootsActionBar({
-  selectedCount,
-  onClearSelection,
-}: {
-  selectedCount: number
-  onClearSelection: () => void
-}) {
-  return (
-    <div className="fixed inset-x-4 bottom-6 z-50 mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-3 border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-      <span className="min-w-0 text-sm font-medium">
-        {selectedCount} selected
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={onClearSelection}
-      >
-        Clear
-      </Button>
-    </div>
   )
 }
 

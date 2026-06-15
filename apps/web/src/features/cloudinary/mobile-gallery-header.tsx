@@ -178,12 +178,7 @@ function MobileNavigationOverlay<TCategory extends MobileGalleryCategory>({
         to={getContactRoute(isAdminMode)}
         onCloseMenu={onCloseMenu}
       />
-      {isAdminMode ? (
-        <MobileAdminActions
-          currentPathname={currentPathname}
-          onCloseMenu={onCloseMenu}
-        />
-      ) : null}
+      {isAdminMode ? <MobileAdminActions /> : null}
     </nav>
   )
 }

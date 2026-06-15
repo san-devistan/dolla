@@ -4,6 +4,7 @@ import {
   getCloudinaryShootFn,
   renameCloudinaryFolderFn,
   reorderCloudinaryAssetsFn,
+  setCloudinaryHomeCarouselAssetFn,
   setCloudinaryShootCreditsFn,
   setCloudinaryShootCoverFn,
 } from "@/features/cloudinary/cloudinary.functions"
@@ -46,6 +47,7 @@ import {
   ChevronRightIcon,
   CheckIcon,
   ImageIcon,
+  HomeIcon,
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -192,6 +194,7 @@ function ShootPage({
   const deleteFolder = useServerFn(deleteCloudinaryFolderFn)
   const deleteShootAssets = useServerFn(deleteCloudinaryShootAssetsFn)
   const reorderAssets = useServerFn(reorderCloudinaryAssetsFn)
+  const setHomeCarouselAsset = useServerFn(setCloudinaryHomeCarouselAssetFn)
   const setShootCover = useServerFn(setCloudinaryShootCoverFn)
   const setShootCredits = useServerFn(setCloudinaryShootCreditsFn)
   const selectedCategory = shootPage.category || undefined
@@ -224,20 +227,6 @@ function ShootPage({
 
   const categoryFolder = selectedCategory
   const shootFolder = selectedShoot
-
-  function refreshShoot() {
-    void runShootAction(
-      () =>
-        getShoot({
-          data: {
-            categoryName: categoryFolder.name,
-            refresh: true,
-            shootName: shootFolder.name,
-          },
-        }),
-      "Media refreshed"
-    )
-  }
 
   function handleUploadClick() {
     uploadInputRef.current?.click()
@@ -721,6 +710,46 @@ function ShootPage({
       })
   }
 
+  function handleToggleHomeCarouselAsset(assetId: string, selected: boolean) {
+    const previousShootPage = shootPage
+
+    setShootPage({
+      ...shootPage,
+      assets: shootPage.assets.map((asset) =>
+        asset.assetId === assetId
+          ? {
+              ...asset,
+              homeCarouselOrderRank: selected
+                ? asset.homeCarouselOrderRank || ASSET_ORDER_STEP
+                : undefined,
+            }
+          : asset
+      ),
+    })
+
+    void setHomeCarouselAsset({
+      data: {
+        assetId,
+        selected,
+      },
+    })
+      .then(() => {
+        toast.success(
+          selected
+            ? "Homepage carousel photo saved"
+            : "Homepage carousel photo removed"
+        )
+
+        return undefined
+      })
+      .catch((homeCarouselError) => {
+        setShootPage(previousShootPage)
+        toast.error(getErrorMessage(homeCarouselError))
+
+        return undefined
+      })
+  }
+
   function openAssetViewer(assetId: string) {
     setActiveViewerAssetId(assetId)
   }
@@ -780,7 +809,6 @@ function ShootPage({
         uploadInputRef={uploadInputRef}
         onCancelRenamingShoot={cancelRenamingShoot}
         onDeleteShoot={handleDeleteShoot}
-        onRefresh={refreshShoot}
         onRenameNameChange={setRenameName}
         onRenameShoot={handleRenameShoot}
         onStartRenamingShoot={startRenamingShoot}
@@ -807,6 +835,7 @@ function ShootPage({
         onColumnDrop={handleColumnDrop}
         onOpenAsset={openAssetViewer}
         onSetShootCover={handleSetShootCover}
+        onToggleHomeCarouselAsset={handleToggleHomeCarouselAsset}
       />
       <ShootCredits
         canEditCredits={canEditCredits}
@@ -855,7 +884,6 @@ function ShootTitle({
   uploadInputRef,
   onCancelRenamingShoot,
   onDeleteShoot,
-  onRefresh,
   onRenameNameChange,
   onRenameShoot,
   onStartRenamingShoot,
@@ -875,7 +903,6 @@ function ShootTitle({
   uploadInputRef: RefObject<HTMLInputElement | null>
   onCancelRenamingShoot: () => void
   onDeleteShoot: () => void
-  onRefresh: () => void
   onRenameNameChange: (name: string) => void
   onRenameShoot: (event: FormEvent<HTMLFormElement>) => void
   onStartRenamingShoot: () => void
@@ -947,16 +974,6 @@ function ShootTitle({
         </div>
         {isAdminMode ? (
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isBusy}
-              onClick={onRefresh}
-            >
-              <RefreshCwIcon data-icon="inline-start" />
-              Refresh
-            </Button>
             <Button
               type="button"
               variant={isRenamingShoot ? "secondary" : "outline"}
@@ -1104,6 +1121,7 @@ function PhotoMasonry({
   onColumnDrop,
   onOpenAsset,
   onSetShootCover,
+  onToggleHomeCarouselAsset,
 }: {
   assets: CloudinaryAsset[]
   canOrganizeAssets: boolean
@@ -1128,6 +1146,7 @@ function PhotoMasonry({
   onColumnDrop: (event: DragEvent<HTMLElement>, columnIndex: number) => void
   onOpenAsset: (assetId: string) => void
   onSetShootCover: (assetId: string) => void
+  onToggleHomeCarouselAsset: (assetId: string, selected: boolean) => void
 }) {
   const masonryColumns = useMemo(
     () => buildMasonryColumns(assets, columnCount),
@@ -1215,6 +1234,7 @@ function PhotoMasonry({
                     onAssetDrop={onAssetDrop}
                     onAssetSelectionChange={onAssetSelectionChange}
                     onSetShootCover={onSetShootCover}
+                    onToggleHomeCarouselAsset={onToggleHomeCarouselAsset}
                   />
                   {activeDropPosition === "after" ? (
                     <AssetInsertionDropZone
@@ -1646,6 +1666,7 @@ function AdminPhotoCard({
   onAssetDrop,
   onAssetSelectionChange,
   onSetShootCover,
+  onToggleHomeCarouselAsset,
 }: {
   asset: CloudinaryAsset
   canOrganizeAssets: boolean
@@ -1660,8 +1681,12 @@ function AdminPhotoCard({
   onAssetDrop: (event: DragEvent<HTMLElement>, assetId: string) => void
   onAssetSelectionChange: (assetId: string, selected?: boolean) => void
   onSetShootCover: (assetId: string) => void
+  onToggleHomeCarouselAsset: (assetId: string, selected: boolean) => void
 }) {
   const isCover = asset.assetId === effectiveCoverAssetId
+  const isHomeCarouselAsset =
+    typeof asset.homeCarouselOrderRank === "number" &&
+    asset.homeCarouselOrderRank > 0
 
   return (
     <article
@@ -1742,6 +1767,31 @@ function AdminPhotoCard({
             {getAssetDimensionLabel(asset)}
           </span>
         </div>
+        <Button
+          type="button"
+          variant={isHomeCarouselAsset ? "brand" : "secondary"}
+          size="sm"
+          className={cn(
+            "absolute top-3 right-3 z-20 h-8 px-2.5 text-xs shadow-sm backdrop-blur transition-opacity",
+            isHomeCarouselAsset
+              ? "opacity-100"
+              : "bg-background/90 opacity-0 group-hover/photo:opacity-100 focus-visible:opacity-100"
+          )}
+          aria-pressed={isHomeCarouselAsset}
+          aria-label={
+            isHomeCarouselAsset
+              ? "Remove from homepage carousel"
+              : "Use in homepage carousel"
+          }
+          disabled={!canOrganizeAssets || isBusy}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggleHomeCarouselAsset(asset.assetId, !isHomeCarouselAsset)
+          }}
+        >
+          <HomeIcon data-icon="inline-start" />
+          Home
+        </Button>
         <Button
           type="button"
           variant={isCover ? "brand" : "secondary"}

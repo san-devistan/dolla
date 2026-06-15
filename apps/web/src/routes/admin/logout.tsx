@@ -1,5 +1,5 @@
 import { logoutAdminFn } from "@/features/admin/admin-auth.functions"
-import { ADMIN_LOGIN_ROUTE } from "@/lib/admin-routes"
+import { ADMIN_HOME_ROUTE, ADMIN_LOGIN_ROUTE } from "@/lib/admin-routes"
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/admin/logout")({
@@ -8,7 +8,7 @@ export const Route = createFileRoute("/admin/logout")({
 
     throw redirect({
       to: ADMIN_LOGIN_ROUTE,
-      search: { redirect: "/admin/media" },
+      search: { redirect: ADMIN_HOME_ROUTE },
     })
   },
 })

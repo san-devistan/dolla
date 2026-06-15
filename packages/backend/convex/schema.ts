@@ -66,6 +66,7 @@ export default defineSchema({
     layoutColumn: v.optional(v.number()),
     layoutOrder: v.optional(v.number()),
     layoutColumnCount: v.optional(v.number()),
+    homeCarouselOrderRank: v.optional(v.number()),
     syncedAt: v.number(),
     deletedAt: nullableNumber,
   })
@@ -85,7 +86,11 @@ export default defineSchema({
       "deletedAt",
       "orderRank",
     ])
-    .index("by_deletedAt_and_createdAt", ["deletedAt", "createdAt"]),
+    .index("by_deletedAt_and_createdAt", ["deletedAt", "createdAt"])
+    .index("by_deletedAt_and_homeCarouselOrderRank", [
+      "deletedAt",
+      "homeCarouselOrderRank",
+    ]),
   siteContent: defineTable({
     key: v.string(),
     blocks: v.array(

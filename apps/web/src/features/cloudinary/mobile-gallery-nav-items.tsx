@@ -1,12 +1,7 @@
-import {
-  ADMIN_LOGOUT_ROUTE,
-  getMediaCategoryRoute,
-  getPublicPathForAdminPath,
-} from "@/lib/admin-routes"
+import { getMediaCategoryRoute } from "@/lib/admin-routes"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import { Link } from "@tanstack/react-router"
 import { Badge } from "@workspace/ui/components/badge"
-import { buttonVariants } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 import { useCallback, useMemo } from "react"
 
@@ -79,7 +74,7 @@ function MobileStaticNavLink({
     | "/about"
     | "/pricing"
     | "/contact"
-    | "/admin/media"
+    | "/admin/home"
     | "/admin/about"
     | "/admin/pricing"
     | "/admin/contact"
@@ -97,43 +92,15 @@ function MobileStaticNavLink({
   )
 }
 
-function MobileAdminActions({
-  currentPathname,
-  onCloseMenu,
-}: {
-  currentPathname: string
-  onCloseMenu: () => void
-}) {
+function MobileAdminActions() {
   return (
     <div className="mt-4 flex flex-col items-center gap-3">
       <Badge
         variant="outline"
-        className="border border-border px-3 py-2 text-[0.625rem] text-foreground"
+        className="border border-destructive bg-destructive px-3 py-2 text-[0.625rem] text-background shadow-sm shadow-destructive/25"
       >
         Admin view
       </Badge>
-      <a
-        href={getPublicPathForAdminPath(currentPathname)}
-        className={buttonVariants({
-          variant: "ghost",
-          size: "sm",
-          className: "font-black tracking-[0.22em]",
-        })}
-        onClick={onCloseMenu}
-      >
-        Public view
-      </a>
-      <a
-        href={ADMIN_LOGOUT_ROUTE}
-        className={buttonVariants({
-          variant: "outline",
-          size: "sm",
-          className: "font-black tracking-[0.22em]",
-        })}
-        onClick={onCloseMenu}
-      >
-        Sign out
-      </a>
     </div>
   )
 }

@@ -1,4 +1,5 @@
-const ADMIN_HOME_ROUTE = "/admin/media" as const
+const ADMIN_HOME_ROUTE = "/admin/home" as const
+const ADMIN_LEGACY_MEDIA_ROUTE = "/admin/media" as const
 const ADMIN_CATEGORY_ROUTE = "/admin/$category" as const
 const ADMIN_SHOOT_ROUTE = "/admin/$category/$shoot" as const
 const ADMIN_PRICING_ROUTE = "/admin/pricing" as const
@@ -90,6 +91,7 @@ export {
   ADMIN_CONTACT_ROUTE,
   ADMIN_CATEGORY_ROUTE,
   ADMIN_HOME_ROUTE,
+  ADMIN_LEGACY_MEDIA_ROUTE,
   ADMIN_LOGIN_ROUTE,
   ADMIN_LOGOUT_ROUTE,
   ADMIN_PRICING_ROUTE,

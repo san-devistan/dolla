@@ -15,6 +15,7 @@ import {
   reorderCloudinaryShoots,
   setCloudinaryAboutContent,
   setCloudinaryCategoryCover,
+  setCloudinaryHomeCarouselAsset,
   setCloudinaryPricingItems,
   setCloudinaryShootCredits,
   setCloudinaryShootCover,
@@ -160,6 +161,11 @@ const setShootCoverInput = (data: unknown) => ({
   assetId: getStringField(data, "assetId"),
 })
 
+const setHomeCarouselAssetInput = (data: unknown) => ({
+  assetId: getStringField(data, "assetId"),
+  selected: getBooleanField(data, "selected"),
+})
+
 const setShootCreditsInput = (data: unknown) => ({
   shootPath: getStringField(data, "shootPath"),
   credits: getStringField(data, "credits"),
@@ -222,6 +228,7 @@ function getPricingItemsField(data: unknown, key: string) {
       {
         id: String(Reflect.get(item, "id") || ""),
         name: String(Reflect.get(item, "name") || ""),
+        description: String(Reflect.get(item, "description") || ""),
         price: String(Reflect.get(item, "price") || ""),
       },
     ]
@@ -332,6 +339,14 @@ const setCloudinaryShootCoverFn = createServerFn({ method: "POST" })
     return setCloudinaryShootCover(data)
   })
 
+const setCloudinaryHomeCarouselAssetFn = createServerFn({ method: "POST" })
+  .inputValidator(setHomeCarouselAssetInput)
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return setCloudinaryHomeCarouselAsset(data)
+  })
+
 const setCloudinaryShootCreditsFn = createServerFn({ method: "POST" })
   .inputValidator(setShootCreditsInput)
   .handler(async ({ data }) => {
@@ -380,6 +395,7 @@ export {
   reorderCloudinaryShootsFn,
   setCloudinaryAboutContentFn,
   setCloudinaryCategoryCoverFn,
+  setCloudinaryHomeCarouselAssetFn,
   setCloudinaryPricingItemsFn,
   setCloudinaryShootCreditsFn,
   setCloudinaryShootCoverFn,

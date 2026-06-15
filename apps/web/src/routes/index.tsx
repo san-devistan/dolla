@@ -9,8 +9,9 @@ import {
   getImageLoadingProps,
 } from "@/features/cloudinary/image-delivery"
 import { ProgressiveImage } from "@/features/cloudinary/progressive-image"
-import { getMediaCategoryRoute } from "@/lib/admin-routes"
+import { getMediaCategoryRoute, getMediaShootRoute } from "@/lib/admin-routes"
 import type {
+  CloudinaryAsset,
   CloudinaryConnection,
   CloudinaryHome,
 } from "@/lib/cloudinary.server"
@@ -18,7 +19,6 @@ import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@workspace/ui/components/button"
-import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
   Dialog,
   DialogClose,
@@ -33,7 +33,12 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { toast } from "@workspace/ui/components/sonner"
 import { cn } from "@workspace/ui/lib/utils"
-import { AlertTriangleIcon, PlusIcon } from "lucide-react"
+import {
+  AlertTriangleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  PlusIcon,
+} from "lucide-react"
 import {
   type DragEvent,
   type FormEvent,
@@ -53,6 +58,9 @@ export const Route = createFileRoute("/")({
   component: PublicDollaHomePage,
 })
 
+const HOME_CAROUSEL_IMAGE_SIZES = "(min-width: 1540px) 1540px, 100vw"
+const HOME_CAROUSEL_IMAGE_WIDTHS = [960, 1280, 1600, 2200, 3200] as const
+
 function PublicDollaHomePage() {
   const initialHome = Route.useLoaderData()
 
@@ -70,9 +78,6 @@ function DollaHomePage({
   const [newCategoryName, setNewCategoryName] = useState("")
   const [isCreateCategoryDialogOpen, setIsCreateCategoryDialogOpen] =
     useState(false)
-  const [selectedCategoryPaths, setSelectedCategoryPaths] = useState<
-    Set<string>
-  >(() => new Set())
   const [draggingCategoryPath, setDraggingCategoryPath] = useState<
     string | null
   >(null)
@@ -89,18 +94,10 @@ function DollaHomePage({
 
   useEffect(() => {
     setHome(initialHome)
-    setSelectedCategoryPaths(new Set())
     setDraggingCategoryPath(null)
     setCategoryDropTarget(null)
     setIsCreateCategoryDialogOpen(false)
   }, [initialHome])
-
-  function refreshHome() {
-    void runHomeAction(
-      () => getHome({ data: { refresh: true } }),
-      "Media refreshed"
-    )
-  }
 
   function handleCreateCategoryDialogOpenChange(open: boolean) {
     setIsCreateCategoryDialogOpen(open)
@@ -144,25 +141,6 @@ function DollaHomePage({
         return undefined
       })
       .catch(() => undefined)
-  }
-
-  function toggleCategorySelection(categoryPath: string, selected?: boolean) {
-    setSelectedCategoryPaths((currentCategoryPaths) => {
-      const nextCategoryPaths = new Set(currentCategoryPaths)
-      const shouldSelect = selected ?? !nextCategoryPaths.has(categoryPath)
-
-      if (shouldSelect) {
-        nextCategoryPaths.add(categoryPath)
-      } else {
-        nextCategoryPaths.delete(categoryPath)
-      }
-
-      return nextCategoryPaths
-    })
-  }
-
-  function clearCategorySelection() {
-    setSelectedCategoryPaths(new Set())
   }
 
   function handleCategoryDragStart(
@@ -293,21 +271,6 @@ function DollaHomePage({
     }
   }
 
-  async function runHomeAction(
-    action: () => Promise<CloudinaryHome>,
-    successMessage: string
-  ) {
-    try {
-      await performHomeAction(action)
-
-      toast.success(successMessage)
-      return true
-    } catch (actionError) {
-      toast.error(getErrorMessage(actionError))
-      return false
-    }
-  }
-
   return (
     <main className="flex min-h-[90svh] flex-col bg-background text-foreground">
       <GalleryHeader categories={home.categories} isAdminMode={isAdminMode} />
@@ -318,6 +281,7 @@ function DollaHomePage({
         )}
       >
         {isAdminMode ? <ConnectionNotice connection={home.connection} /> : null}
+        <HomeHeroCarousel assets={home.heroAssets} isAdminMode={isAdminMode} />
         <div className="mt-2 mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mt-3 md:mb-7">
           <div>
             <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
@@ -326,15 +290,6 @@ function DollaHomePage({
           </div>
           {isAdminMode ? (
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isBusy}
-                onClick={refreshHome}
-              >
-                Refresh
-              </Button>
               <CreateCategoryDialog
                 canCreateCategory={canMutate}
                 isBusy={isBusy}
@@ -354,13 +309,10 @@ function DollaHomePage({
           draggingCategoryPath={draggingCategoryPath}
           isAdminMode={isAdminMode}
           isBusy={isBusy}
-          selectedCategoryPaths={selectedCategoryPaths}
           onCategoryDragEnd={handleCategoryDragEnd}
           onCategoryDragOver={handleCategoryDragOver}
           onCategoryDragStart={handleCategoryDragStart}
           onCategoryDrop={handleCategoryDrop}
-          onCategorySelectionChange={toggleCategorySelection}
-          onClearCategorySelection={clearCategorySelection}
         />
       </section>
     </main>
@@ -369,6 +321,222 @@ function DollaHomePage({
 
 export { DollaHomePage }
 
+function HomeHeroCarousel({
+  assets,
+  isAdminMode,
+}: {
+  assets: CloudinaryAsset[]
+  isAdminMode: boolean
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [autoAdvanceResetKey, setAutoAdvanceResetKey] = useState(0)
+
+  useEffect(() => {
+    setCurrentIndex(0)
+  }, [assets])
+
+  useEffect(() => {
+    if (assets.length <= 1) {
+      return undefined
+    }
+
+    const timer = window.setInterval(() => {
+      setCurrentIndex((index) => (index + 1) % assets.length)
+    }, 3500)
+
+    return () => window.clearInterval(timer)
+  }, [assets.length, autoAdvanceResetKey])
+
+  if (assets.length === 0) {
+    return null
+  }
+
+  const activeIndex = Math.min(currentIndex, assets.length - 1)
+
+  function resetAutoAdvanceCounter() {
+    setAutoAdvanceResetKey((key) => key + 1)
+  }
+
+  function showPreviousAsset() {
+    setCurrentIndex((index) => (index === 0 ? assets.length - 1 : index - 1))
+    resetAutoAdvanceCounter()
+  }
+
+  function showNextAsset() {
+    setCurrentIndex((index) => (index + 1) % assets.length)
+    resetAutoAdvanceCounter()
+  }
+
+  function showAssetAtIndex(index: number) {
+    setCurrentIndex(index)
+    resetAutoAdvanceCounter()
+  }
+
+  return (
+    <section
+      aria-label="Homepage carousel"
+      className="relative mt-1 mb-8 overflow-hidden bg-muted md:mb-12"
+    >
+      <div className="relative h-[clamp(34rem,72svh,48rem)] sm:h-[clamp(36rem,78svh,52rem)] lg:h-[clamp(38rem,82svh,58rem)]">
+        {assets.map((asset, index) => {
+          const shootParams = getHomeCarouselShootParams(asset)
+          const image = (
+            <ProgressiveImage
+              src={getHomeCarouselImageUrl(asset)}
+              srcSet={getHomeCarouselImageSrcSet(asset)}
+              sizes={HOME_CAROUSEL_IMAGE_SIZES}
+              alt={asset.displayName}
+              className="absolute inset-0 size-full object-cover"
+              {...getImageLoadingProps(index === activeIndex)}
+            />
+          )
+
+          return (
+            <div
+              key={asset.assetId}
+              aria-hidden={index !== activeIndex}
+              className="absolute inset-0 transition-transform duration-500 ease-out"
+              style={{
+                transform: `translateX(${(index - activeIndex) * 100}%)`,
+              }}
+            >
+              {shootParams ? (
+                <Link
+                  to={getMediaShootRoute(isAdminMode)}
+                  params={shootParams}
+                  tabIndex={index === activeIndex ? undefined : -1}
+                  aria-label={`Open ${asset.shootName} shoot`}
+                  className="absolute inset-0 block cursor-pointer ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {image}
+                </Link>
+              ) : (
+                image
+              )}
+            </div>
+          )
+        })}
+      </div>
+      {assets.length > 1 ? (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute top-1/2 left-3 z-10 -translate-y-1/2 border border-white/20 bg-black/35 text-white backdrop-blur hover:bg-white/15 hover:text-white active:not-aria-[haspopup]:!-translate-y-1/2"
+            aria-label="Show previous carousel photo"
+            onClick={showPreviousAsset}
+          >
+            <ChevronLeftIcon />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute top-1/2 right-3 z-10 -translate-y-1/2 border border-white/20 bg-black/35 text-white backdrop-blur hover:bg-white/15 hover:text-white active:not-aria-[haspopup]:!-translate-y-1/2"
+            aria-label="Show next carousel photo"
+            onClick={showNextAsset}
+          >
+            <ChevronRightIcon />
+          </Button>
+          <div className="absolute inset-x-0 bottom-3 z-10 flex justify-center gap-1.5">
+            {assets.map((asset, index) => (
+              <button
+                key={asset.assetId}
+                type="button"
+                className={cn(
+                  "h-1.5 rounded-full bg-white/65 transition-all hover:bg-white",
+                  index === activeIndex ? "w-6 bg-white" : "w-1.5"
+                )}
+                aria-label={`Show carousel photo ${index + 1}`}
+                aria-current={index === activeIndex}
+                onClick={() => showAssetAtIndex(index)}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+    </section>
+  )
+}
+
+function getHomeCarouselShootParams(asset: CloudinaryAsset) {
+  if (!asset.categoryName || !asset.shootName) {
+    return undefined
+  }
+
+  return {
+    category: toMediaRouteSegment(asset.categoryName),
+    shoot: toMediaRouteSegment(asset.shootName),
+  }
+}
+
+function getHomeCarouselImageUrl(asset: CloudinaryAsset) {
+  if (asset.resourceType !== "image") {
+    return asset.previewUrl || asset.secureUrl || asset.thumbnailUrl
+  }
+
+  const width = getHomeCarouselImageWidths(asset).at(-1) ?? 3200
+
+  return withCloudinaryDeliveryTransformation(
+    asset.secureUrl,
+    `c_limit,w_${width}/f_auto/q_auto:best`
+  )
+}
+
+function getHomeCarouselImageSrcSet(asset: CloudinaryAsset) {
+  if (asset.resourceType !== "image") {
+    return undefined
+  }
+
+  return getHomeCarouselImageWidths(asset)
+    .map(
+      (width) =>
+        `${withCloudinaryDeliveryTransformation(
+          asset.secureUrl,
+          `c_limit,w_${width}/f_auto/q_auto:best`
+        )} ${width}w`
+    )
+    .join(", ")
+}
+
+function getHomeCarouselImageWidths(asset: CloudinaryAsset) {
+  const sourceWidth =
+    typeof asset.width === "number" && Number.isFinite(asset.width)
+      ? Math.round(asset.width)
+      : undefined
+
+  if (!sourceWidth || sourceWidth <= 0) {
+    return [...HOME_CAROUSEL_IMAGE_WIDTHS]
+  }
+
+  const maximumWidth = Math.min(sourceWidth, 3200)
+  const widths: number[] = HOME_CAROUSEL_IMAGE_WIDTHS.filter(
+    (width) => width < maximumWidth
+  )
+
+  widths.push(maximumWidth)
+
+  return widths
+}
+
+function withCloudinaryDeliveryTransformation(
+  url: string,
+  transformation: string
+) {
+  const uploadMarker = "/upload/"
+  const uploadIndex = url.indexOf(uploadMarker)
+
+  if (uploadIndex === -1) {
+    return url
+  }
+
+  return `${url.slice(
+    0,
+    uploadIndex + uploadMarker.length
+  )}${transformation}/${url.slice(uploadIndex + uploadMarker.length)}`
+}
+
 function CategoryGrid({
   canOrganizeCategories,
   categories,
@@ -376,13 +544,10 @@ function CategoryGrid({
   draggingCategoryPath,
   isAdminMode,
   isBusy,
-  selectedCategoryPaths,
   onCategoryDragEnd,
   onCategoryDragOver,
   onCategoryDragStart,
   onCategoryDrop,
-  onCategorySelectionChange,
-  onClearCategorySelection,
 }: {
   canOrganizeCategories: boolean
   categories: CloudinaryHome["categories"]
@@ -390,7 +555,6 @@ function CategoryGrid({
   draggingCategoryPath: string | null
   isAdminMode: boolean
   isBusy: boolean
-  selectedCategoryPaths: Set<string>
   onCategoryDragEnd: () => void
   onCategoryDragOver: (
     event: DragEvent<HTMLElement>,
@@ -401,8 +565,6 @@ function CategoryGrid({
     categoryPath: string
   ) => void
   onCategoryDrop: (event: DragEvent<HTMLElement>, categoryPath: string) => void
-  onCategorySelectionChange: (categoryPath: string, selected?: boolean) => void
-  onClearCategorySelection: () => void
 }) {
   if (categories.length === 0 && !isAdminMode) {
     return (
@@ -429,20 +591,12 @@ function CategoryGrid({
           isAdminMode={isAdminMode}
           isBusy={isBusy}
           isPriority={index < 3}
-          isSelected={selectedCategoryPaths.has(category.path)}
           onCategoryDragEnd={onCategoryDragEnd}
           onCategoryDragOver={onCategoryDragOver}
           onCategoryDragStart={onCategoryDragStart}
           onCategoryDrop={onCategoryDrop}
-          onCategorySelectionChange={onCategorySelectionChange}
         />
       ))}
-      {isAdminMode && selectedCategoryPaths.size > 0 ? (
-        <SelectedCategoriesActionBar
-          selectedCount={selectedCategoryPaths.size}
-          onClearSelection={onClearCategorySelection}
-        />
-      ) : null}
     </section>
   )
 }
@@ -455,12 +609,10 @@ function CategoryCard({
   isAdminMode,
   isBusy,
   isPriority,
-  isSelected,
   onCategoryDragEnd,
   onCategoryDragOver,
   onCategoryDragStart,
   onCategoryDrop,
-  onCategorySelectionChange,
 }: {
   category: CloudinaryHome["categories"][number]
   canOrganizeCategories: boolean
@@ -469,7 +621,6 @@ function CategoryCard({
   isAdminMode: boolean
   isBusy: boolean
   isPriority: boolean
-  isSelected: boolean
   onCategoryDragEnd: () => void
   onCategoryDragOver: (
     event: DragEvent<HTMLElement>,
@@ -480,7 +631,6 @@ function CategoryCard({
     categoryPath: string
   ) => void
   onCategoryDrop: (event: DragEvent<HTMLElement>, categoryPath: string) => void
-  onCategorySelectionChange: (categoryPath: string, selected?: boolean) => void
 }) {
   return (
     <article
@@ -491,8 +641,7 @@ function CategoryCard({
           ? "cursor-grab active:cursor-grabbing"
           : "",
         dropPosition ? "ring-2 ring-brand/70" : "",
-        isDragging ? "opacity-45 ring-2 ring-brand/50" : "",
-        isSelected ? "ring-2 ring-brand/70" : ""
+        isDragging ? "opacity-45 ring-2 ring-brand/50" : ""
       )}
       onDragStart={(event) => onCategoryDragStart(event, category.path)}
       onDragOver={(event) => onCategoryDragOver(event, category.path)}
@@ -537,48 +686,7 @@ function CategoryCard({
           </div>
         </div>
       </Link>
-      {isAdminMode ? (
-        <Checkbox
-          checked={isSelected}
-          disabled={isBusy}
-          aria-label={isSelected ? "Deselect category" : "Select category"}
-          className={cn(
-            "absolute top-3 left-3 z-20 size-5 border-background/80 bg-background/90 text-primary-foreground shadow-sm transition-opacity",
-            isSelected
-              ? "opacity-100"
-              : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          )}
-          onClick={(event) => event.stopPropagation()}
-          onCheckedChange={(checked) =>
-            onCategorySelectionChange(category.path, checked)
-          }
-        />
-      ) : null}
     </article>
-  )
-}
-
-function SelectedCategoriesActionBar({
-  selectedCount,
-  onClearSelection,
-}: {
-  selectedCount: number
-  onClearSelection: () => void
-}) {
-  return (
-    <div className="fixed inset-x-4 bottom-6 z-50 mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-3 border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-      <span className="min-w-0 text-sm font-medium">
-        {selectedCount} selected
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={onClearSelection}
-      >
-        Clear
-      </Button>
-    </div>
   )
 }
 
