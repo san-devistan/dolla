@@ -9,7 +9,10 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as PricingDottxtRouteImport } from './routes/pricing[.]txt'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as CategoryRouteImport } from './routes/$category'
@@ -29,9 +32,24 @@ import { Route as AdminMediaCategoryRouteImport } from './routes/admin/media/$ca
 import { Route as AdminCategoryShootRouteImport } from './routes/admin/$category/$shoot'
 import { Route as AdminMediaCategoryShootRouteImport } from './routes/admin/media/$category/$shoot'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingDottxtRoute = PricingDottxtRouteImport.update({
+  id: '/pricing.txt',
+  path: '/pricing.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
+  id: '/llms.txt',
+  path: '/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -130,7 +148,10 @@ export interface FileRoutesByFullPath {
   '/$category': typeof CategoryRouteWithChildren
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/pricing': typeof PricingRoute
+  '/pricing.txt': typeof PricingDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$category/$shoot': typeof CategoryShootRoute
   '/admin/$category': typeof AdminCategoryRouteWithChildren
   '/admin/about': typeof AdminAboutRoute
@@ -151,7 +172,10 @@ export interface FileRoutesByTo {
   '/$category': typeof CategoryRouteWithChildren
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/pricing': typeof PricingRoute
+  '/pricing.txt': typeof PricingDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$category/$shoot': typeof CategoryShootRoute
   '/admin/$category': typeof AdminCategoryRouteWithChildren
   '/admin/about': typeof AdminAboutRoute
@@ -173,7 +197,10 @@ export interface FileRoutesById {
   '/$category': typeof CategoryRouteWithChildren
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/pricing': typeof PricingRoute
+  '/pricing.txt': typeof PricingDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$category/$shoot': typeof CategoryShootRoute
   '/admin/$category': typeof AdminCategoryRouteWithChildren
   '/admin/about': typeof AdminAboutRoute
@@ -196,7 +223,10 @@ export interface FileRouteTypes {
     | '/$category'
     | '/about'
     | '/contact'
+    | '/llms.txt'
     | '/pricing'
+    | '/pricing.txt'
+    | '/sitemap.xml'
     | '/$category/$shoot'
     | '/admin/$category'
     | '/admin/about'
@@ -217,7 +247,10 @@ export interface FileRouteTypes {
     | '/$category'
     | '/about'
     | '/contact'
+    | '/llms.txt'
     | '/pricing'
+    | '/pricing.txt'
+    | '/sitemap.xml'
     | '/$category/$shoot'
     | '/admin/$category'
     | '/admin/about'
@@ -238,7 +271,10 @@ export interface FileRouteTypes {
     | '/$category'
     | '/about'
     | '/contact'
+    | '/llms.txt'
     | '/pricing'
+    | '/pricing.txt'
+    | '/sitemap.xml'
     | '/$category/$shoot'
     | '/admin/$category'
     | '/admin/about'
@@ -260,7 +296,10 @@ export interface RootRouteChildren {
   CategoryRoute: typeof CategoryRouteWithChildren
   AboutRoute: typeof AboutRoute
   ContactRoute: typeof ContactRoute
+  LlmsDottxtRoute: typeof LlmsDottxtRoute
   PricingRoute: typeof PricingRoute
+  PricingDottxtRoute: typeof PricingDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AdminCategoryRoute: typeof AdminCategoryRouteWithChildren
   AdminAboutRoute: typeof AdminAboutRoute
   AdminContactRoute: typeof AdminContactRoute
@@ -275,11 +314,32 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing.txt': {
+      id: '/pricing.txt'
+      path: '/pricing.txt'
+      fullPath: '/pricing.txt'
+      preLoaderRoute: typeof PricingDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pricing': {
       id: '/pricing'
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/llms.txt': {
+      id: '/llms.txt'
+      path: '/llms.txt'
+      fullPath: '/llms.txt'
+      preLoaderRoute: typeof LlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -463,7 +523,10 @@ const rootRouteChildren: RootRouteChildren = {
   CategoryRoute: CategoryRouteWithChildren,
   AboutRoute: AboutRoute,
   ContactRoute: ContactRoute,
+  LlmsDottxtRoute: LlmsDottxtRoute,
   PricingRoute: PricingRoute,
+  PricingDottxtRoute: PricingDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   AdminCategoryRoute: AdminCategoryRouteWithChildren,
   AdminAboutRoute: AdminAboutRoute,
   AdminContactRoute: AdminContactRoute,

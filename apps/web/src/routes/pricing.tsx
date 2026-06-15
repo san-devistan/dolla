@@ -1,16 +1,11 @@
 import { getCloudinaryPricingFn } from "@/features/cloudinary/cloudinary.functions"
 import { PricingPage } from "@/features/pricing/pricing-page"
+import { createPricingSeoHead } from "@/lib/seo"
 import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/pricing")({
   loader: () => getCloudinaryPricingFn(),
-  head: () => ({
-    meta: [
-      {
-        title: "Tarifs | Dolla Shashin",
-      },
-    ],
-  }),
+  head: ({ loaderData }) => createPricingSeoHead(loaderData),
   component: PublicPricingPage,
 })
 

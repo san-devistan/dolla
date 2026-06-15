@@ -2,6 +2,7 @@ import { assertAdminAuthenticated } from "@/lib/admin-auth.server"
 import {
   getCloudinaryErrorMessage,
   normalizeDollaFolderPath,
+  replaceCloudinaryAboutImage,
   uploadCloudinaryFile,
 } from "@/lib/cloudinary.server"
 import { createFileRoute } from "@tanstack/react-router"
@@ -25,6 +26,8 @@ export const Route = createFileRoute("/api/cloudinary/upload")({
           const folderPath = normalizeDollaFolderPath(
             typeof folderEntry === "string" ? folderEntry : "Dolla"
           )
+          const targetEntry = formData.get("target")
+          const target = typeof targetEntry === "string" ? targetEntry : ""
           const files = formData.getAll("files").filter(isFileEntry)
 
           if (files.length === 0) {
@@ -32,6 +35,21 @@ export const Route = createFileRoute("/api/cloudinary/upload")({
               { error: "Choose at least one file to upload." },
               { status: 400 }
             )
+          }
+
+          if (target === "about-image") {
+            const file = files[0]
+
+            if (!file) {
+              return Response.json(
+                { error: "Choose an image to upload." },
+                { status: 400 }
+              )
+            }
+
+            const about = await replaceCloudinaryAboutImage(file)
+
+            return Response.json({ about })
           }
 
           const assets = await Promise.all(

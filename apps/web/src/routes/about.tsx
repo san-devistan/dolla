@@ -18,28 +18,32 @@ import type {
   CloudinaryAsset,
   CloudinaryConnection,
 } from "@/lib/cloudinary.server"
+import { createAboutSeoHead } from "@/lib/seo"
 import { createFileRoute } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
 import { toast } from "@workspace/ui/components/sonner"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   AlertTriangleIcon,
   BoldIcon,
   Heading2Icon,
+  ImageUpIcon,
   SaveIcon,
 } from "lucide-react"
-import { type FormEvent, useEffect, useRef, useState } from "react"
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 
 export const Route = createFileRoute("/about")({
   loader: () => getCloudinaryAboutFn(),
-  head: () => ({
-    meta: [
-      {
-        title: "A propos | Dolla Shashin",
-      },
-    ],
-  }),
+  head: ({ loaderData }) => createAboutSeoHead(loaderData?.image),
   component: PublicAboutPage,
 })
 
@@ -61,9 +65,12 @@ function AboutPage({
     serializeAboutBlocks(initialAbout.content)
   )
   const [isBusy, setIsBusy] = useState(false)
+  const aboutImageInputRef = useRef<HTMLInputElement>(null)
 
   const getAbout = useServerFn(getCloudinaryAboutFn)
   const setAboutContent = useServerFn(setCloudinaryAboutContentFn)
+  const canReplaceAboutImage =
+    isAdminMode && about.connection.configured && !about.connection.error
 
   useEffect(() => {
     setAbout(initialAbout)
@@ -74,6 +81,20 @@ function AboutPage({
   function handleSaveAboutContent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     void saveAboutContent()
+  }
+
+  function handleAboutImageUploadClick() {
+    aboutImageInputRef.current?.click()
+  }
+
+  function handleAboutImageFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    void replaceAboutImage(file)
   }
 
   async function saveAboutContent() {
@@ -96,6 +117,44 @@ function AboutPage({
     }
   }
 
+  async function replaceAboutImage(file: File) {
+    if (file.type && !file.type.toLowerCase().startsWith("image/")) {
+      toast.error("Choose an image file.")
+      return
+    }
+
+    const formData = new FormData()
+
+    formData.set("target", "about-image")
+    formData.append("files", file)
+    setIsBusy(true)
+
+    try {
+      const response = await fetch("/api/cloudinary/upload", {
+        method: "POST",
+        body: formData,
+      })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(getUploadError(result) || "Upload failed.")
+      }
+
+      const nextAbout = await getAbout()
+
+      setAbout(nextAbout)
+      toast.success("About image updated")
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    } finally {
+      if (aboutImageInputRef.current) {
+        aboutImageInputRef.current.value = ""
+      }
+
+      setIsBusy(false)
+    }
+  }
+
   return (
     <main className="flex min-h-[90svh] flex-col bg-background text-foreground">
       <GalleryHeader categories={about.categories} isAdminMode={isAdminMode} />
@@ -110,7 +169,12 @@ function AboutPage({
         <AboutImage
           connection={about.connection}
           image={about.image}
+          inputRef={aboutImageInputRef}
+          isBusy={isBusy}
+          canReplaceImage={canReplaceAboutImage}
           isAdminMode={isAdminMode}
+          onImageFileChange={handleAboutImageFileChange}
+          onUploadClick={handleAboutImageUploadClick}
         />
         {isAdminMode ? (
           <AboutEditor
@@ -130,14 +194,26 @@ function AboutPage({
 export { AboutPage }
 
 function AboutImage({
+  canReplaceImage,
   connection,
   image,
+  inputRef,
+  isBusy,
   isAdminMode,
+  onImageFileChange,
+  onUploadClick,
 }: {
+  canReplaceImage: boolean
   connection: CloudinaryConnection
   image?: CloudinaryAsset
+  inputRef: RefObject<HTMLInputElement | null>
+  isBusy: boolean
   isAdminMode: boolean
+  onImageFileChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onUploadClick: () => void
 }) {
+  const connectionIssue = getConnectionIssue(connection)
+
   return (
     <figure className="w-full shrink-0 md:w-[min(30vw,420px)]">
       <div className="relative aspect-[7/10] w-full overflow-hidden border border-black bg-muted">
@@ -156,10 +232,33 @@ function AboutImage({
           </div>
         )}
       </div>
-      {isAdminMode && connection.error ? (
+      {isAdminMode ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!canReplaceImage || isBusy}
+            onClick={onUploadClick}
+          >
+            <ImageUpIcon data-icon="inline-start" />
+            Replace image
+          </Button>
+          <Input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            tabIndex={-1}
+            disabled={!canReplaceImage || isBusy}
+            onChange={onImageFileChange}
+          />
+        </div>
+      ) : null}
+      {isAdminMode && connectionIssue ? (
         <p className="mt-3 flex items-center gap-2 text-xs text-destructive">
           <AlertTriangleIcon className="size-3.5" />
-          {connection.error}
+          {connectionIssue}
         </p>
       ) : null}
     </figure>
@@ -223,4 +322,28 @@ function AboutEditor({
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Action failed."
+}
+
+function getUploadError(result: unknown) {
+  if (!result || typeof result !== "object") {
+    return ""
+  }
+
+  const error = Reflect.get(result, "error")
+
+  return typeof error === "string" ? error : ""
+}
+
+function getConnectionIssue(connection: CloudinaryConnection) {
+  if (connection.error) {
+    return connection.error
+  }
+
+  if (!connection.configured) {
+    return `Missing Cloudinary configuration: ${connection.missingKeys.join(
+      ", "
+    )}`
+  }
+
+  return ""
 }

@@ -96,11 +96,11 @@ function MobileHeaderBar({
 }) {
   return (
     <header className="sticky top-0 left-0 z-50 flex w-full items-center justify-between bg-background px-4 py-2">
-      <h1 className="font-sans text-lg font-extrabold tracking-[0.1em] uppercase">
+      <div className="font-sans text-lg font-extrabold tracking-[0.1em] uppercase">
         <Link to={getMediaHomeRoute(isAdminMode)} onClick={onCloseMenu}>
           DOLLA SHASHIN
         </Link>
-      </h1>
+      </div>
       <button
         type="button"
         aria-controls="mobile-gallery-navigation"
@@ -145,39 +145,50 @@ function MobileNavigationOverlay<TCategory extends MobileGalleryCategory>({
     >
       <MobileStaticNavLink
         active={currentPathname === getMediaHomeRoute(isAdminMode)}
-        label="HOME"
+        label="ACCUEIL"
         to={getMediaHomeRoute(isAdminMode)}
         onCloseMenu={onCloseMenu}
       />
-      {categories.map((category) => (
-        <MobileCategoryNavItem
-          key={category.path}
-          active={category.path === activeCategoryPath}
-          category={category}
-          isAdminMode={isAdminMode}
-          isBusy={isBusy}
+      {categories.length > 0 ? (
+        <div className="mt-5 flex flex-col items-center gap-4">
+          {categories.map((category) => (
+            <MobileCategoryNavItem
+              key={category.path}
+              active={category.path === activeCategoryPath}
+              category={category}
+              isAdminMode={isAdminMode}
+              isBusy={isBusy}
+              onCloseMenu={onCloseMenu}
+              onSelectCategory={onSelectCategory}
+            />
+          ))}
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "flex flex-col items-center gap-4",
+          categories.length > 0 && "mt-5"
+        )}
+      >
+        <MobileStaticNavLink
+          active={currentPathname === getPricingRoute(isAdminMode)}
+          label="PRIX"
+          to={getPricingRoute(isAdminMode)}
           onCloseMenu={onCloseMenu}
-          onSelectCategory={onSelectCategory}
         />
-      ))}
-      <MobileStaticNavLink
-        active={currentPathname === getPricingRoute(isAdminMode)}
-        label="PRIX"
-        to={getPricingRoute(isAdminMode)}
-        onCloseMenu={onCloseMenu}
-      />
-      <MobileStaticNavLink
-        active={currentPathname === getAboutRoute(isAdminMode)}
-        label="A PROPOS"
-        to={getAboutRoute(isAdminMode)}
-        onCloseMenu={onCloseMenu}
-      />
-      <MobileStaticNavLink
-        active={currentPathname === getContactRoute(isAdminMode)}
-        label="CONTACT"
-        to={getContactRoute(isAdminMode)}
-        onCloseMenu={onCloseMenu}
-      />
+        <MobileStaticNavLink
+          active={currentPathname === getAboutRoute(isAdminMode)}
+          label="A PROPOS"
+          to={getAboutRoute(isAdminMode)}
+          onCloseMenu={onCloseMenu}
+        />
+        <MobileStaticNavLink
+          active={currentPathname === getContactRoute(isAdminMode)}
+          label="CONTACT"
+          to={getContactRoute(isAdminMode)}
+          onCloseMenu={onCloseMenu}
+        />
+      </div>
       {isAdminMode ? <MobileAdminActions /> : null}
     </nav>
   )

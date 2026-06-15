@@ -15,7 +15,9 @@ import type {
   CloudinaryConnection,
   CloudinaryHome,
 } from "@/lib/cloudinary.server"
+import { isDirectPhotoCategoryPath } from "@/lib/direct-photo-category"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
+import { createHomeSeoHead } from "@/lib/seo"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@workspace/ui/components/button"
@@ -32,6 +34,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { toast } from "@workspace/ui/components/sonner"
+import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   AlertTriangleIcon,
@@ -53,6 +56,7 @@ type CategoryDropTarget = {
 
 export const Route = createFileRoute("/")({
   loader: () => getCloudinaryHomeFn({ data: {} }),
+  head: ({ loaderData }) => createHomeSeoHead(loaderData),
   component: PublicDollaHomePage,
 })
 
@@ -82,6 +86,7 @@ function DollaHomePage({
   const [categoryDropTarget, setCategoryDropTarget] =
     useState<CategoryDropTarget | null>(null)
   const [isBusy, setIsBusy] = useState(false)
+  const isMobile = useIsMobile()
 
   const getHome = useServerFn(getCloudinaryHomeFn)
   const createFolder = useServerFn(createCloudinaryFolderFn)
@@ -270,11 +275,16 @@ function DollaHomePage({
         )}
       >
         {isAdminMode ? <ConnectionNotice connection={home.connection} /> : null}
-        <HomeHeroCarousel assets={home.heroAssets} isAdminMode={isAdminMode} />
-        <div className="my-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:my-10">
+        {isMobile ? null : (
+          <HomeHeroCarousel
+            assets={home.heroAssets}
+            isAdminMode={isAdminMode}
+          />
+        )}
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:my-10">
           <div>
             <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
-              Categories
+              Donnez vie à vos rêves
             </h1>
           </div>
           {isAdminMode ? (
@@ -368,7 +378,7 @@ function HomeHeroCarousel({
     >
       <div className="relative h-[clamp(34rem,72svh,48rem)] sm:h-[clamp(36rem,78svh,52rem)] lg:h-[clamp(38rem,82svh,58rem)]">
         {assets.map((asset, index) => {
-          const shootParams = getHomeCarouselShootParams(asset)
+          const assetRoute = getHomeCarouselAssetRoute(asset, isAdminMode)
           const image = (
             <ProgressiveImage
               src={getHomeCarouselImageUrl(asset)}
@@ -389,12 +399,12 @@ function HomeHeroCarousel({
                 transform: `translateX(${(index - activeIndex) * 100}%)`,
               }}
             >
-              {shootParams ? (
+              {assetRoute ? (
                 <Link
-                  to={getMediaShootRoute(isAdminMode)}
-                  params={shootParams}
+                  to={assetRoute.to}
+                  params={assetRoute.params}
                   tabIndex={index === activeIndex ? undefined : -1}
-                  aria-label={`Open ${asset.shootName} shoot`}
+                  aria-label={assetRoute.ariaLabel}
                   className="absolute inset-0 block cursor-pointer ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {image}
@@ -449,14 +459,33 @@ function HomeHeroCarousel({
   )
 }
 
-function getHomeCarouselShootParams(asset: CloudinaryAsset) {
-  if (!asset.categoryName || !asset.shootName) {
+function getHomeCarouselAssetRoute(
+  asset: CloudinaryAsset,
+  isAdminMode: boolean
+) {
+  if (!asset.categoryName) {
+    return undefined
+  }
+
+  if (isDirectPhotoCategoryPath(asset.folder, "Dolla")) {
+    return {
+      to: getMediaCategoryRoute(isAdminMode),
+      params: { category: toMediaRouteSegment(asset.categoryName) },
+      ariaLabel: `Open ${asset.categoryName} category`,
+    }
+  }
+
+  if (!asset.shootName) {
     return undefined
   }
 
   return {
-    category: toMediaRouteSegment(asset.categoryName),
-    shoot: toMediaRouteSegment(asset.shootName),
+    to: getMediaShootRoute(isAdminMode),
+    params: {
+      category: toMediaRouteSegment(asset.categoryName),
+      shoot: toMediaRouteSegment(asset.shootName),
+    },
+    ariaLabel: `Open ${asset.shootName} shoot`,
   }
 }
 
@@ -564,7 +593,7 @@ function CategoryGrid({
   }
 
   return (
-    <section className="grid gap-x-14 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+    <section className="grid gap-x-8 gap-y-6 sm:grid-cols-2 sm:gap-x-14 sm:gap-y-12 lg:grid-cols-3">
       {categories.map((category, index) => (
         <CategoryCard
           key={category.path}
@@ -691,13 +720,21 @@ function CategoryCard({
               {category.name}
             </h2>
             <p className="mt-0.5 text-[0.625rem] leading-tight font-medium tracking-[0.12em] text-white/70 uppercase sm:text-[0.6875rem]">
-              {category.shootCount} shoots
+              {getCategoryCountLabel(category)}
             </p>
           </div>
         </div>
       </Link>
     </article>
   )
+}
+
+function getCategoryCountLabel(category: CloudinaryHome["categories"][number]) {
+  if (category.isDirectPhotoCategory) {
+    return `${category.assetCount} photo${category.assetCount === 1 ? "" : "s"}`
+  }
+
+  return `${category.shootCount} shoot${category.shootCount === 1 ? "" : "s"}`
 }
 
 function CreateCategoryDialog({

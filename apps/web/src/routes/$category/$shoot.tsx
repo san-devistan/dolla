@@ -13,6 +13,7 @@ import {
   getImageLoadingProps,
 } from "@/features/cloudinary/image-delivery"
 import { ProgressiveImage } from "@/features/cloudinary/progressive-image"
+import { prepareImageUploadFiles } from "@/features/cloudinary/upload-image-processing"
 import { getMediaCategoryRoute, getMediaShootRoute } from "@/lib/admin-routes"
 import type {
   CloudinaryAsset,
@@ -21,6 +22,7 @@ import type {
   CloudinaryShootPage,
 } from "@/lib/cloudinary.server"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
+import { createShootSeoHead } from "@/lib/seo"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import {
@@ -69,8 +71,8 @@ import {
   useState,
 } from "react"
 
-type AssetDropPosition = "before" | "after"
-type AssetDropTarget =
+export type AssetDropPosition = "before" | "after"
+export type AssetDropTarget =
   | {
       assetId: string
       position: AssetDropPosition
@@ -107,6 +109,8 @@ export const Route = createFileRoute("/$category/$shoot")({
         shootName: params.shoot,
       },
     }),
+  head: ({ loaderData, params }) =>
+    createShootSeoHead(loaderData, params.category, params.shoot),
   component: PublicShootPage,
 })
 
@@ -148,6 +152,10 @@ type ShootRouteParams = {
 function PublicShootPage() {
   const initialShootPage = Route.useLoaderData()
   const params = Route.useParams()
+
+  if (!initialShootPage) {
+    throw new Error("Shoot failed to load.")
+  }
 
   return (
     <ShootPage
@@ -239,7 +247,18 @@ function ShootPage({
       return
     }
 
-    void uploadSelectedFiles(files)
+    const uploadPromise = uploadSelectedFiles(files)
+
+    toast.promise(uploadPromise, {
+      loading:
+        files.length === 1
+          ? "Preparing and uploading photo..."
+          : `Preparing and uploading ${files.length} photos...`,
+      success: files.length === 1 ? "Photo uploaded" : "Photos uploaded",
+      error: (uploadError) => getErrorMessage(uploadError),
+    })
+
+    void uploadPromise.catch(() => undefined)
   }
 
   async function uploadSelectedFiles(files: File[]) {
@@ -248,17 +267,18 @@ function ShootPage({
       return
     }
 
-    const formData = new FormData()
-
-    formData.set("folderPath", shootFolder.path)
-
-    for (const file of files) {
-      formData.append("files", file)
-    }
-
     setIsBusy(true)
 
     try {
+      const uploadFiles = await prepareImageUploadFiles(files)
+      const formData = new FormData()
+
+      formData.set("folderPath", shootFolder.path)
+
+      for (const file of uploadFiles) {
+        formData.append("files", file)
+      }
+
       const response = await fetch("/api/cloudinary/upload", {
         method: "POST",
         body: formData,
@@ -283,12 +303,8 @@ function ShootPage({
       setShootPage(nextShootPage)
 
       if (nextShootPage.connection.error) {
-        toast.error(nextShootPage.connection.error)
-      } else {
-        toast.success("Upload complete")
+        throw new Error(nextShootPage.connection.error)
       }
-    } catch (uploadError) {
-      toast.error(getErrorMessage(uploadError))
     } finally {
       setIsBusy(false)
     }
@@ -868,7 +884,17 @@ function ShootPage({
   )
 }
 
-export { ShootPage }
+export {
+  PhotoMasonry,
+  PhotoViewer,
+  SelectedPhotosActionBar,
+  ShootPage,
+  UploadPhotosButton,
+  getAssetLayoutOrder,
+  moveAssetToColumnEnd,
+  moveAssetToDropTarget,
+  useMasonryColumnCount,
+}
 
 function ShootTitle({
   canUpload,
@@ -919,7 +945,7 @@ function ShootTitle({
   }, [isRenamingShoot])
 
   return (
-    <section className="mx-auto w-full max-w-[1540px] px-4 pt-2 pb-5 sm:px-6 md:pt-0 md:pb-8 lg:px-8">
+    <section className="mx-auto w-full max-w-[1540px] px-4 pb-4 sm:px-6 md:pb-8 lg:px-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <Link
@@ -936,7 +962,7 @@ function ShootTitle({
           </Link>
           {isRenamingShoot ? (
             <form
-              className="mt-2 flex max-w-3xl items-center gap-3"
+              className="flex max-w-3xl items-center gap-3"
               onSubmit={onRenameShoot}
             >
               <Input
@@ -967,7 +993,7 @@ function ShootTitle({
               </Button>
             </form>
           ) : (
-            <h1 className="mt-2 font-heading text-4xl leading-none tracking-normal md:text-6xl">
+            <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
               {shoot.name}
             </h1>
           )}
@@ -1107,9 +1133,11 @@ function PhotoMasonry({
   columnCount,
   draggingAssetId,
   dropTarget,
+  emptyMessage = "No photos in this shoot yet.",
   isAdminMode,
   isBusy,
   selectedAssetIds,
+  showCoverControl = true,
   shoot,
   onAssetDragEnd,
   onAssetInsertionDragOver,
@@ -1128,9 +1156,11 @@ function PhotoMasonry({
   columnCount: number
   draggingAssetId: string | null
   dropTarget: AssetDropTarget | null
+  emptyMessage?: string
   isAdminMode: boolean
   isBusy: boolean
   selectedAssetIds: Set<string>
+  showCoverControl?: boolean
   shoot: CloudinaryFolder
   onAssetDragEnd: () => void
   onAssetInsertionDragOver: (
@@ -1167,7 +1197,7 @@ function PhotoMasonry({
   if (assets.length === 0) {
     return (
       <section className="mx-auto w-full max-w-[1540px] px-4 py-16 text-sm text-muted-foreground sm:px-6 lg:px-8">
-        No photos in this shoot yet.
+        {emptyMessage}
       </section>
     )
   }
@@ -1228,6 +1258,7 @@ function PhotoMasonry({
                     isBusy={isBusy}
                     isPriority={assetIndex !== -1 && assetIndex < 6}
                     isSelected={selectedAssetIds.has(asset.assetId)}
+                    showCoverControl={showCoverControl}
                     onAssetDragEnd={onAssetDragEnd}
                     onAssetDragOver={onAssetDragOver}
                     onAssetDragStart={onAssetDragStart}
@@ -1660,6 +1691,7 @@ function AdminPhotoCard({
   isBusy,
   isPriority,
   isSelected,
+  showCoverControl,
   onAssetDragEnd,
   onAssetDragOver,
   onAssetDragStart,
@@ -1675,6 +1707,7 @@ function AdminPhotoCard({
   isBusy: boolean
   isPriority: boolean
   isSelected: boolean
+  showCoverControl: boolean
   onAssetDragEnd: () => void
   onAssetDragOver: (event: DragEvent<HTMLElement>, assetId: string) => void
   onAssetDragStart: (event: DragEvent<HTMLElement>, assetId: string) => void
@@ -1792,25 +1825,27 @@ function AdminPhotoCard({
           <HomeIcon data-icon="inline-start" />
           Home
         </Button>
-        <Button
-          type="button"
-          variant={isCover ? "brand" : "secondary"}
-          size="sm"
-          className={cn(
-            "absolute right-3 bottom-3 z-20 h-8 px-2.5 text-xs shadow-sm backdrop-blur transition-opacity",
-            isCover
-              ? "opacity-100"
-              : "bg-background/90 opacity-0 group-hover/photo:opacity-100 focus-visible:opacity-100"
-          )}
-          disabled={!canOrganizeAssets || isBusy}
-          onClick={(event) => {
-            event.stopPropagation()
-            onSetShootCover(asset.assetId)
-          }}
-        >
-          <StarIcon data-icon="inline-start" />
-          Cover
-        </Button>
+        {showCoverControl ? (
+          <Button
+            type="button"
+            variant={isCover ? "brand" : "secondary"}
+            size="sm"
+            className={cn(
+              "absolute right-3 bottom-3 z-20 h-8 px-2.5 text-xs shadow-sm backdrop-blur transition-opacity",
+              isCover
+                ? "opacity-100"
+                : "bg-background/90 opacity-0 group-hover/photo:opacity-100 focus-visible:opacity-100"
+            )}
+            disabled={!canOrganizeAssets || isBusy}
+            onClick={(event) => {
+              event.stopPropagation()
+              onSetShootCover(asset.assetId)
+            }}
+          >
+            <StarIcon data-icon="inline-start" />
+            Cover
+          </Button>
+        ) : null}
       </div>
     </article>
   )

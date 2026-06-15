@@ -1,3 +1,8 @@
+import {
+  DIRECT_PHOTO_CATEGORY_NAME,
+  getDirectPhotoCategoryPath,
+  isDirectPhotoCategoryPath,
+} from "@/lib/direct-photo-category"
 import { mediaRouteSegmentMatchesName } from "@/lib/media-route-segment"
 import { api } from "@workspace/backend/api"
 import { v2 as cloudinary } from "cloudinary"
@@ -7,6 +12,8 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 const CLOUDINARY_ROOT_FOLDER = "Dolla"
+const ABOUT_IMAGE_SITE_ASSET_KEY = "aboutImage"
+const ABOUT_IMAGE_PUBLIC_ID = "dolla-about"
 const FORBIDDEN_FOLDER_CHARS = /[?&#\\%<>+]/
 const DELETE_ASSET_BATCH_SIZE = 100
 const HOME_LATEST_ASSET_LIMIT = 42
@@ -149,6 +156,8 @@ type CloudinaryHome = {
     orderRank?: number
     cover?: CloudinaryAsset | null
     shootCount: number
+    assetCount: number
+    isDirectPhotoCategory: boolean
   }>
   heroAssets: CloudinaryAsset[]
   latestAssets: CloudinaryAsset[]
@@ -168,6 +177,7 @@ type CloudinaryCategoryPage = {
   category?: CloudinaryFolder | null
   categories: CloudinaryHome["categories"]
   shoots: CloudinaryShootSummary[]
+  assets: CloudinaryAsset[]
 }
 
 type CloudinaryShootPage = {
@@ -246,6 +256,29 @@ type ConvexCategorySummaryView = {
   orderRank: number
   cover: ConvexAssetView | null
   shootCount: number
+  assetCount?: number
+  isDirectPhotoCategory?: boolean
+}
+
+type ConvexSiteAssetView = {
+  key: string
+  assetId: string
+  publicId: string
+  folder: string
+  displayName: string
+  format: string
+  resourceType: string
+  bytes: number
+  width: number | null
+  height: number | null
+  aspectRatio: number | null
+  secureUrl: string
+  thumbnailUrl: string
+  previewUrl: string
+  displayFolder: string
+  createdAt: string | null
+  context: Record<string, string>
+  updatedAt: number
 }
 
 type CloudinaryReadOptions = {
@@ -444,6 +477,24 @@ async function readAboutContent() {
     return content?.blocks ?? getDefaultAboutContent()
   } catch {
     return getDefaultAboutContent()
+  }
+}
+
+async function readAboutImage() {
+  const client = getConvexMediaClient()
+
+  if (!client) {
+    return null
+  }
+
+  try {
+    const asset = await client.query(api.media.getSiteAsset, {
+      key: ABOUT_IMAGE_SITE_ASSET_KEY,
+    })
+
+    return asset ? mapConvexSiteAsset(asset) : null
+  } catch {
+    return null
   }
 }
 
@@ -1043,6 +1094,61 @@ function mapConvexAsset(asset: ConvexAssetView): CloudinaryAsset {
   }
 }
 
+function mapConvexSiteAsset(asset: ConvexSiteAssetView): CloudinaryAsset {
+  return {
+    assetId: asset.assetId,
+    publicId: asset.publicId,
+    folder: asset.folder,
+    displayName: asset.displayName,
+    format: asset.format,
+    resourceType: asset.resourceType,
+    bytes: asset.bytes,
+    width: asset.width ?? undefined,
+    height: asset.height ?? undefined,
+    aspectRatio: asset.aspectRatio ?? undefined,
+    secureUrl: asset.secureUrl,
+    thumbnailUrl: getThumbnailUrl({
+      secureUrl: asset.secureUrl,
+      resourceType: asset.resourceType,
+      width: asset.width,
+      height: asset.height,
+      aspectRatio: asset.aspectRatio,
+    }),
+    thumbnailSrcSet: getThumbnailSrcSet({
+      secureUrl: asset.secureUrl,
+      resourceType: asset.resourceType,
+      width: asset.width,
+      height: asset.height,
+      aspectRatio: asset.aspectRatio,
+    }),
+    previewUrl: asset.previewUrl,
+    displayFolder: asset.displayFolder,
+    createdAt: asset.createdAt || undefined,
+    context: asset.context,
+  }
+}
+
+function mapSiteAsset(asset: CloudinaryAsset) {
+  return {
+    assetId: asset.assetId,
+    publicId: asset.publicId,
+    folder: asset.folder,
+    displayName: asset.displayName,
+    format: asset.format,
+    resourceType: asset.resourceType,
+    bytes: asset.bytes,
+    width: asset.width ?? null,
+    height: asset.height ?? null,
+    aspectRatio: asset.aspectRatio ?? null,
+    secureUrl: asset.secureUrl,
+    thumbnailUrl: asset.thumbnailUrl,
+    previewUrl: asset.previewUrl,
+    displayFolder: asset.displayFolder,
+    createdAt: asset.createdAt || null,
+    context: asset.context,
+  }
+}
+
 function mapConvexCategorySummary(
   category: ConvexCategorySummaryView
 ): CloudinaryHome["categories"][number] {
@@ -1052,6 +1158,8 @@ function mapConvexCategorySummary(
     orderRank: category.orderRank,
     cover: category.cover ? mapConvexAsset(category.cover) : null,
     shootCount: category.shootCount,
+    assetCount: category.assetCount || 0,
+    isDirectPhotoCategory: category.isDirectPhotoCategory === true,
   }
 }
 
@@ -1073,23 +1181,31 @@ function mapSyncFolder(folder: CloudinaryFolder) {
 
 function mapSyncAsset(asset: CloudinaryAsset) {
   const folderInfo = getFolderInfo(asset.folder)
+  const isDirectCategoryAsset = isDirectPhotoCategoryPath(
+    folderInfo.folderPath,
+    CLOUDINARY_ROOT_FOLDER
+  )
 
   if (
-    folderInfo.kind !== "shoot" ||
+    (folderInfo.kind !== "shoot" && !isDirectCategoryAsset) ||
     !folderInfo.categoryName ||
-    !folderInfo.shootName
+    (!folderInfo.shootName && !isDirectCategoryAsset)
   ) {
     return null
   }
+
+  const shootName = folderInfo.shootName || folderInfo.categoryName
 
   return {
     assetId: asset.assetId,
     publicId: asset.publicId,
     folder: asset.folder,
-    categoryPath: `${CLOUDINARY_ROOT_FOLDER}/${folderInfo.categoryName}`,
+    categoryPath: isDirectCategoryAsset
+      ? folderInfo.folderPath
+      : `${CLOUDINARY_ROOT_FOLDER}/${folderInfo.categoryName}`,
     shootPath: asset.folder,
     categoryName: folderInfo.categoryName,
-    shootName: folderInfo.shootName,
+    shootName,
     displayName: asset.displayName,
     format: asset.format,
     resourceType: asset.resourceType,
@@ -1121,7 +1237,15 @@ async function syncCloudinaryMetadata({
 }) {
   await client.mutation(api.media.syncSnapshot, {
     folders: folders
-      .filter((folder) => folder.kind === "category" || folder.kind === "shoot")
+      .filter(
+        (folder) =>
+          folder.kind === "category" ||
+          (folder.kind === "shoot" &&
+            !isDirectPhotoCategoryPath(
+              folder.parentPath,
+              CLOUDINARY_ROOT_FOLDER
+            ))
+      )
       .map(mapSyncFolder),
     assets: assets
       .map(mapSyncAsset)
@@ -1132,21 +1256,29 @@ async function syncCloudinaryMetadata({
   })
 }
 
-function getShootFolderPaths(folders: CloudinaryFolder[]) {
+function getGalleryAssetFolderPaths(folders: CloudinaryFolder[]) {
   return folders
-    .filter((folder) => folder.kind === "shoot")
+    .filter(
+      (folder) =>
+        (folder.kind === "shoot" &&
+          !isDirectPhotoCategoryPath(
+            folder.parentPath,
+            CLOUDINARY_ROOT_FOLDER
+          )) ||
+        isDirectPhotoCategoryFolder(folder)
+    )
     .map((folder) => folder.path)
 }
 
-async function searchDollaShootAssets(folders: CloudinaryFolder[]) {
-  const shootFolderPaths = getShootFolderPaths(folders)
+async function searchDollaGalleryAssets(folders: CloudinaryFolder[]) {
+  const assetFolderPaths = getGalleryAssetFolderPaths(folders)
 
-  if (shootFolderPaths.length === 0) {
+  if (assetFolderPaths.length === 0) {
     return []
   }
 
   return await searchAssetsInFolders({
-    folderPaths: shootFolderPaths,
+    folderPaths: assetFolderPaths,
     imageOnly: true,
   })
 }
@@ -1165,7 +1297,7 @@ async function syncCloudinaryCatalog({
     folders,
     assets,
     markMissingFolders: true,
-    assetFolderPaths: getShootFolderPaths(folders),
+    assetFolderPaths: getGalleryAssetFolderPaths(folders),
   })
 }
 
@@ -1254,6 +1386,7 @@ async function readSyncedCategory({
       cover: shoot.cover ? mapConvexAsset(shoot.cover) : null,
       assetCount: shoot.assetCount,
     })),
+    assets: categoryPage.assets.map(mapConvexAsset),
   }
 }
 
@@ -1416,7 +1549,8 @@ function hasCachedCategoryData(categoryPage: CloudinaryCategoryPage) {
   return (
     Boolean(categoryPage.category) ||
     categoryPage.categories.length > 0 ||
-    categoryPage.shoots.length > 0
+    categoryPage.shoots.length > 0 ||
+    categoryPage.assets.length > 0
   )
 }
 
@@ -1578,6 +1712,25 @@ function ensureRootFolder(folders: CloudinaryFolder[]) {
   ]
 }
 
+function ensureDirectPhotoCategoryFolder(folders: CloudinaryFolder[]) {
+  if (folders.some((folder) => isDirectPhotoCategoryFolder(folder))) {
+    return folders
+  }
+
+  return [
+    ...folders,
+    {
+      name: DIRECT_PHOTO_CATEGORY_NAME,
+      path: getDirectPhotoCategoryPath(CLOUDINARY_ROOT_FOLDER),
+      displayPath: DIRECT_PHOTO_CATEGORY_NAME,
+      kind: "category" as const,
+      depth: 1,
+      parentPath: CLOUDINARY_ROOT_FOLDER,
+      categoryName: DIRECT_PHOTO_CATEGORY_NAME,
+    },
+  ]
+}
+
 function sortFolders(folders: CloudinaryFolder[]): CloudinaryFolder[] {
   const sortedFolders = folders.slice()
 
@@ -1652,7 +1805,7 @@ async function searchDollaFolders(): Promise<CloudinaryFolder[]> {
     .filter((folder) => isDollaFolderPath(folder.path || ""))
     .map(mapFolder)
 
-  return sortFolders(ensureRootFolder(folders))
+  return sortFolders(ensureDirectPhotoCategoryFolder(ensureRootFolder(folders)))
 }
 
 async function searchAssetsInFolders({
@@ -1771,7 +1924,8 @@ async function getCloudinaryLibrary(
         assets,
         markMissingFolders: true,
         assetFolderPaths:
-          getFolderInfo(selectedFolder).kind === "shoot"
+          getFolderInfo(selectedFolder).kind === "shoot" ||
+          isDirectPhotoCategoryPath(selectedFolder, CLOUDINARY_ROOT_FOLDER)
             ? [selectedFolder]
             : [],
       })
@@ -1848,29 +2002,13 @@ async function getCloudinaryHome(
     configureCloudinary()
 
     const folders = await searchDollaFolders()
-    const syncedAssets = await searchDollaShootAssets(folders)
+    const syncedAssets = await searchDollaGalleryAssets(folders)
     const latestAssets = syncedAssets.slice(0, HOME_LATEST_ASSET_LIMIT)
-    const categoryFolders = folders.filter((folder) => folder.depth === 1)
-    const categories = categoryFolders.map((folder) => {
-      const shootCount = new Set(
-        folders
-          .filter((candidate) => candidate.parentPath === folder.path)
-          .map((candidate) => candidate.path)
-      ).size
-
-      return {
-        name: folder.name,
-        path: folder.path,
-        orderRank: folder.orderRank,
-        cover: findCategoryCoverAsset(syncedAssets, folder.path),
-        shootCount,
-      }
-    })
 
     const directHome = {
       connection: connectionState,
       rootFolder: CLOUDINARY_ROOT_FOLDER,
-      categories,
+      categories: getCategorySummaries(folders, syncedAssets),
       heroAssets: latestAssets.slice(0, 7),
       latestAssets,
     } satisfies CloudinaryHome
@@ -1916,9 +2054,10 @@ async function getCloudinaryHome(
 
 async function getCloudinaryAbout(): Promise<CloudinaryAbout> {
   const connectionState = getCloudinaryConfigState()
-  const [categories, content] = await Promise.all([
+  const [categories, content, cachedImage] = await Promise.all([
     readConvexCategoryNavigation(),
     readAboutContent(),
+    readAboutImage(),
   ])
 
   if (!connectionState.configured) {
@@ -1926,6 +2065,17 @@ async function getCloudinaryAbout(): Promise<CloudinaryAbout> {
       connection: connectionState,
       rootFolder: CLOUDINARY_ROOT_FOLDER,
       categories,
+      image: cachedImage || undefined,
+      content,
+    } satisfies CloudinaryAbout
+  }
+
+  if (cachedImage) {
+    return {
+      connection: connectionState,
+      rootFolder: CLOUDINARY_ROOT_FOLDER,
+      categories,
+      image: cachedImage,
       content,
     } satisfies CloudinaryAbout
   }
@@ -1984,13 +2134,18 @@ function getCategorySummaries(
       const shootCount = folders.filter(
         (candidate) => candidate.parentPath === folder.path
       ).length
+      const directAssets = isDirectPhotoCategoryFolder(folder)
+        ? latestAssets.filter((asset) => asset.folder === folder.path)
+        : []
 
       return {
         name: folder.name,
         path: folder.path,
         orderRank: folder.orderRank,
         cover: findCategoryCoverAsset(latestAssets, folder.path),
-        shootCount,
+        shootCount: isDirectPhotoCategoryFolder(folder) ? 0 : shootCount,
+        assetCount: directAssets.length,
+        isDirectPhotoCategory: isDirectPhotoCategoryFolder(folder),
       }
     })
 }
@@ -2022,11 +2177,15 @@ function findCategoryCoverAsset(
   return assets.find((asset) => isSameOrChildFolder(asset.folder, categoryPath))
 }
 
+function isDirectPhotoCategoryFolder(folder: CloudinaryFolder) {
+  return isDirectPhotoCategoryPath(folder.path, CLOUDINARY_ROOT_FOLDER)
+}
+
 function getCategoryShootFolders(
   folders: CloudinaryFolder[],
   category: CloudinaryFolder | undefined
 ) {
-  if (!category) {
+  if (!category || isDirectPhotoCategoryFolder(category)) {
     return []
   }
 
@@ -2074,6 +2233,7 @@ async function getCloudinaryCategory(
       rootFolder: CLOUDINARY_ROOT_FOLDER,
       categories: [],
       shoots: [],
+      assets: [],
     } satisfies CloudinaryCategoryPage
   }
 
@@ -2094,12 +2254,16 @@ async function getCloudinaryCategory(
     const category = findCategoryFolderByRouteSegment(folders, categoryName)
     const categoryPath = category?.path || buildCategoryFolderPath(categoryName)
     const shoots = getCategoryShootFolders(folders, category)
-    const syncedAssets = await searchDollaShootAssets(folders)
+    const syncedAssets = await searchDollaGalleryAssets(folders)
     const categoryAssets = category
       ? syncedAssets.filter((asset) =>
           isSameOrChildFolder(asset.folder, category.path)
         )
       : []
+    const directCategoryAssets =
+      category && isDirectPhotoCategoryFolder(category)
+        ? categoryAssets.filter((asset) => asset.folder === category.path)
+        : []
 
     const directCategoryPage = {
       connection: connectionState,
@@ -2107,6 +2271,7 @@ async function getCloudinaryCategory(
       category,
       categories: getCategorySummaries(folders, syncedAssets),
       shoots: getShootSummaries({ assets: categoryAssets, shoots }),
+      assets: directCategoryAssets,
     } satisfies CloudinaryCategoryPage
     const convexClient = getConvexMediaClient()
 
@@ -2144,6 +2309,7 @@ async function getCloudinaryCategory(
       rootFolder: CLOUDINARY_ROOT_FOLDER,
       categories: [],
       shoots: [],
+      assets: [],
     } satisfies CloudinaryCategoryPage
   }
 }
@@ -2184,7 +2350,7 @@ async function getCloudinaryShoot(
       folders,
       shootName,
     })
-    const syncedAssets = await searchDollaShootAssets(folders)
+    const syncedAssets = await searchDollaGalleryAssets(folders)
     const assets = shoot
       ? syncedAssets.filter((asset) => asset.folder === shoot.path)
       : []
@@ -2248,9 +2414,32 @@ async function createCloudinaryFolder(parentPath: string, name: string) {
     throw new Error("Only category and shoot folders can be created.")
   }
 
+  if (
+    folderInfo.kind === "shoot" &&
+    isDirectPhotoCategoryPath(parentPath, CLOUDINARY_ROOT_FOLDER)
+  ) {
+    throw new Error("Mariage stores photos directly and cannot contain shoots.")
+  }
+
   await cloudinary.api.create_folder(folderPath)
 
   return getCloudinaryLibrary(folderPath)
+}
+
+async function ensureCloudinaryFolderExists(folderPath: string) {
+  try {
+    await cloudinary.api.create_folder(folderPath)
+  } catch (error) {
+    if (!isExistingCloudinaryFolderError(error)) {
+      throw error
+    }
+  }
+}
+
+function isExistingCloudinaryFolderError(error: unknown) {
+  const message = getCloudinaryErrorMessage(error).toLowerCase()
+
+  return message.includes("exists") || message.includes("already exist")
 }
 
 async function renameCloudinaryFolder(folderPath: string, name: string) {
@@ -2283,6 +2472,15 @@ async function moveCloudinaryShoots({
 
   if (targetCategoryInfo.kind !== "category") {
     throw new Error("Move shoots into a category folder.")
+  }
+
+  if (
+    isDirectPhotoCategoryPath(
+      normalizedTargetCategoryPath,
+      CLOUDINARY_ROOT_FOLDER
+    )
+  ) {
+    throw new Error("Mariage stores photos directly and cannot contain shoots.")
   }
 
   if (normalizedShootPaths.length === 0) {
@@ -2467,8 +2665,10 @@ async function deleteCloudinaryFolder(folderPath: string) {
     throw new Error("Folder not found.")
   }
 
-  const shootFolderPaths = foldersToDelete
-    .filter((folder) => folder.kind === "shoot")
+  const assetFolderPaths = foldersToDelete
+    .filter(
+      (folder) => folder.kind === "shoot" || isDirectPhotoCategoryFolder(folder)
+    )
     .map((folder) => folder.path)
   const assets = await searchAssetsInFolders({
     folderPaths: foldersToDelete.map((folder) => folder.path),
@@ -2481,7 +2681,7 @@ async function deleteCloudinaryFolder(folderPath: string) {
     await cloudinary.api.delete_folder(folder.path)
   }
 
-  await syncDeletedCloudinaryFolders(shootFolderPaths)
+  await syncDeletedCloudinaryFolders(assetFolderPaths)
 
   return getCloudinaryLibrary(parentPath || CLOUDINARY_ROOT_FOLDER)
 }
@@ -2503,8 +2703,13 @@ async function deleteCloudinaryShootAssets({
     new Set(assetIds.map((assetId) => assetId.trim()).filter(Boolean))
   )
 
-  if (folderInfo.kind !== "shoot") {
-    throw new Error("Photos can only be deleted from a shoot folder.")
+  if (
+    folderInfo.kind !== "shoot" &&
+    !isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER)
+  ) {
+    throw new Error(
+      "Photos can only be deleted from a shoot folder or Mariage."
+    )
   }
 
   if (selectedAssetIds.length === 0) {
@@ -2554,8 +2759,17 @@ async function uploadCloudinaryFile(file: File, folderPath: string) {
   const selectedFolder = normalizeDollaFolderPath(folderPath)
   const folderInfo = getFolderInfo(selectedFolder)
 
-  if (folderInfo.kind !== "shoot") {
-    throw new Error("Upload photos into a shoot folder.")
+  if (
+    folderInfo.kind !== "shoot" &&
+    !isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER)
+  ) {
+    throw new Error("Upload photos into a shoot folder or Mariage.")
+  }
+
+  if (
+    isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER)
+  ) {
+    await ensureCloudinaryFolderExists(selectedFolder)
   }
 
   const bytes = Buffer.from(await file.arrayBuffer())
@@ -2604,6 +2818,93 @@ async function uploadCloudinaryFile(file: File, folderPath: string) {
   }
 
   return asset
+}
+
+async function replaceCloudinaryAboutImage(file: File) {
+  const convexClient = getRequiredConvexMediaClient()
+
+  configureCloudinary()
+  validateImageFile(file)
+
+  const previousImage = await getCurrentCloudinaryAboutImage()
+  const uploadedImage = await uploadCloudinaryAboutImage(file)
+
+  try {
+    await convexClient.mutation(api.media.setSiteAsset, {
+      key: ABOUT_IMAGE_SITE_ASSET_KEY,
+      asset: mapSiteAsset(uploadedImage),
+    })
+  } catch (error) {
+    await deleteCloudinaryAssets([uploadedImage]).catch(() => undefined)
+    throw error
+  }
+
+  if (previousImage && previousImage.publicId !== uploadedImage.publicId) {
+    await deleteCloudinaryAssets([previousImage])
+  }
+
+  return getCloudinaryAbout()
+}
+
+async function getCurrentCloudinaryAboutImage() {
+  const cachedImage = await readAboutImage()
+
+  if (cachedImage) {
+    return cachedImage
+  }
+
+  const rootAssets = await searchAssetsInFolders({
+    folderPaths: [CLOUDINARY_ROOT_FOLDER],
+    imageOnly: true,
+    maxResults: 1,
+  })
+
+  return rootAssets[0]
+}
+
+async function uploadCloudinaryAboutImage(file: File) {
+  const bytes = Buffer.from(await file.arrayBuffer())
+
+  const result = await new Promise<CloudinaryUploadResult>(
+    (resolve, reject) => {
+      const upload = cloudinary.uploader.upload_stream(
+        {
+          asset_folder: CLOUDINARY_ROOT_FOLDER,
+          display_name: "About image",
+          invalidate: true,
+          overwrite: true,
+          public_id: ABOUT_IMAGE_PUBLIC_ID,
+          resource_type: "image",
+          tags: ["dolla-admin", "dolla-about"],
+          unique_filename: false,
+          use_filename: false,
+        },
+        (error, response) => {
+          if (error) {
+            reject(error)
+            return
+          }
+
+          if (!response) {
+            reject(new Error("Cloudinary did not return an upload response."))
+            return
+          }
+
+          resolve(response)
+        }
+      )
+
+      upload.end(bytes)
+    }
+  )
+
+  return mapAsset(result)
+}
+
+function validateImageFile(file: File) {
+  if (file.type && !file.type.toLowerCase().startsWith("image/")) {
+    throw new Error("Choose an image file.")
+  }
 }
 
 async function reorderCloudinaryShoots({
@@ -2759,7 +3060,45 @@ function getCloudinaryErrorMessage(error: unknown) {
     return error.message
   }
 
+  const message = getUnknownErrorMessage(error)
+
+  if (message) {
+    return message
+  }
+
   return "Cloudinary request failed."
+}
+
+function getUnknownErrorMessage(error: unknown): string | null {
+  if (typeof error === "string") {
+    return error
+  }
+
+  if (!error || typeof error !== "object") {
+    return null
+  }
+
+  const message = Reflect.get(error, "message")
+
+  if (typeof message === "string" && message) {
+    return message
+  }
+
+  const nestedError = Reflect.get(error, "error")
+
+  if (typeof nestedError === "string" && nestedError) {
+    return nestedError
+  }
+
+  if (nestedError && typeof nestedError === "object") {
+    const nestedMessage = Reflect.get(nestedError, "message")
+
+    if (typeof nestedMessage === "string" && nestedMessage) {
+      return nestedMessage
+    }
+  }
+
+  return null
 }
 
 export {
@@ -2777,6 +3116,7 @@ export {
   normalizeDollaFolderPath,
   moveCloudinaryShoots,
   renameCloudinaryFolder,
+  replaceCloudinaryAboutImage,
   reorderCloudinaryAssets,
   reorderCloudinaryCategories,
   reorderCloudinaryShoots,

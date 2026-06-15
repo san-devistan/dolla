@@ -8,6 +8,8 @@ import {
 } from "./_generated/server"
 
 const ROOT_FOLDER = "Dolla"
+const DIRECT_PHOTO_CATEGORY_NAME = "Mariage"
+const DIRECT_PHOTO_CATEGORY_PATH = `${ROOT_FOLDER}/${DIRECT_PHOTO_CATEGORY_NAME}`
 const ORDER_STEP = 1000
 const MAX_CATEGORIES = 100
 const MAX_SHOOTS = 500
@@ -84,8 +86,28 @@ const siteContentBlockValidator = v.object({
   bold: v.boolean(),
 })
 
+const siteAssetValidator = v.object({
+  assetId: v.string(),
+  publicId: v.string(),
+  folder: v.string(),
+  displayName: v.string(),
+  format: v.string(),
+  resourceType: v.string(),
+  bytes: v.number(),
+  width: nullableNumber,
+  height: nullableNumber,
+  aspectRatio: nullableNumber,
+  secureUrl: v.string(),
+  thumbnailUrl: v.string(),
+  previewUrl: v.string(),
+  displayFolder: v.string(),
+  createdAt: nullableString,
+  context: v.record(v.string(), v.string()),
+})
+
 type SyncFolder = Infer<typeof syncFolderValidator>
 type SyncAsset = Infer<typeof syncAssetValidator>
+type SiteAssetInput = Infer<typeof siteAssetValidator>
 type ReorderAssetLayout = Infer<typeof reorderAssetLayoutValidator>
 type OrderedAssetPatch = {
   assetId: string
@@ -109,6 +131,17 @@ type MediaCategory = SystemFields<"mediaCategories"> & {
   syncedAt: number
   deletedAt: number | null
 }
+type MediaCategoryFolder = Pick<
+  MediaCategory,
+  | "path"
+  | "name"
+  | "displayPath"
+  | "orderRank"
+  | "coverShootPath"
+  | "cloudinaryExternalId"
+  | "cloudinaryCreatedAt"
+  | "cloudinaryUpdatedAt"
+>
 type MediaShoot = SystemFields<"mediaShoots"> & {
   path: string
   categoryPath: string
@@ -153,6 +186,27 @@ type MediaAsset = SystemFields<"mediaAssets"> & {
   syncedAt: number
   deletedAt: number | null
 }
+type SiteAsset = SystemFields<"siteAssets"> & {
+  key: string
+  cloudinaryAssetId: string
+  publicId: string
+  assetFolder: string
+  displayName: string
+  format: string
+  resourceType: string
+  bytes: number
+  width: number | null
+  height: number | null
+  aspectRatio: number | null
+  secureUrl: string
+  thumbnailUrl: string
+  previewUrl: string
+  displayFolder: string
+  createdAt: string | null
+  context: Record<string, string>
+  updatedAt: number
+  deletedAt: number | null
+}
 
 export const getSiteContent = query({
   args: {
@@ -190,6 +244,47 @@ export const setSiteContent = mutation({
         key: normalizeSiteContentKey(args.key),
         blocks,
         updatedAt,
+      })
+    }
+
+    return null
+  },
+})
+
+export const getSiteAsset = query({
+  args: {
+    key: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const asset = await getActiveSiteAssetByKey(ctx, args.key)
+
+    return asset ? siteAssetView(asset) : null
+  },
+})
+
+export const setSiteAsset = mutation({
+  args: {
+    key: v.string(),
+    asset: siteAssetValidator,
+  },
+  handler: async (ctx, args) => {
+    const key = normalizeSiteContentKey(args.key)
+    const asset = normalizeSiteAsset(args.asset)
+    const existing = await getSiteAssetByKey(ctx, key)
+    const updatedAt = Date.now()
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        ...asset,
+        updatedAt,
+        deletedAt: null,
+      })
+    } else {
+      await ctx.db.insert("siteAssets", {
+        key,
+        ...asset,
+        updatedAt,
+        deletedAt: null,
       })
     }
 
@@ -266,9 +361,12 @@ export const getLibrary = query({
         ? categories[0]?.path || ROOT_FOLDER
         : args.folderPath
     const selectedShoot = shoots.find((shoot) => shoot.path === selectedFolder)
+    const selectedDirectCategory = isDirectPhotoCategoryPath(selectedFolder)
     const assets = selectedShoot
       ? await listActiveAssetsForShoot(ctx, selectedShoot.path, MAX_ASSETS)
-      : []
+      : selectedDirectCategory
+        ? await listActiveAssetsForShoot(ctx, selectedFolder, MAX_ASSETS)
+        : []
 
     return {
       rootFolder: ROOT_FOLDER,
@@ -312,10 +410,17 @@ export const getCategory = query({
   args: { categoryPath: v.string() },
   handler: async (ctx, args) => {
     const categories = await listActiveCategories(ctx)
-    const category = await getActiveCategoryByPath(ctx, args.categoryPath)
-    const shoots = category
-      ? await listActiveShootsForCategory(ctx, category.path)
-      : []
+    const storedCategory = await getActiveCategoryByPath(ctx, args.categoryPath)
+    const category =
+      storedCategory || getVirtualDirectPhotoCategory(args.categoryPath)
+    const shoots =
+      category && !isDirectPhotoCategoryPath(category.path)
+        ? await listActiveShootsForCategory(ctx, category.path)
+        : []
+    const assets =
+      category && isDirectPhotoCategoryPath(category.path)
+        ? await listActiveAssetsForShoot(ctx, category.path, MAX_ASSETS)
+        : []
     const shootSummaries = []
 
     for (const shoot of shoots) {
@@ -327,6 +432,7 @@ export const getCategory = query({
       category: category ? categoryFolderView(category) : null,
       categories: await buildCategorySummaries(ctx, categories),
       shoots: shootSummaries,
+      assets: assets.map(assetView),
     }
   },
 })
@@ -393,7 +499,7 @@ export const reorderAssets = mutation({
   handler: async (ctx, args) => {
     const shoot = await getActiveShootByPath(ctx, args.shootPath)
 
-    if (!shoot) {
+    if (!shoot && !isDirectPhotoCategoryPath(args.shootPath)) {
       throw new Error("Shoot not found.")
     }
 
@@ -402,7 +508,7 @@ export const reorderAssets = mutation({
       args.assetLayouts
     )
 
-    await patchOrderedAssets(ctx, shoot.path, orderedAssets)
+    await patchOrderedAssets(ctx, shoot?.path || args.shootPath, orderedAssets)
 
     return null
   },
@@ -590,6 +696,10 @@ async function upsertShoots(
 
   for (const folder of folders) {
     if (!folder.parentPath || !folder.categoryName) {
+      continue
+    }
+
+    if (isDirectPhotoCategoryPath(folder.parentPath)) {
       continue
     }
 
@@ -807,13 +917,25 @@ async function patchOrderedCategories(
   const categoriesByPath = new Map(
     categories.map((category) => [category.path, category])
   )
+  const orderedKnownCategoryPaths = categoryPaths.filter((categoryPath) =>
+    categoriesByPath.has(categoryPath)
+  )
+  const unknownCategoryPaths = categoryPaths.filter(
+    (categoryPath) =>
+      !categoriesByPath.has(categoryPath) &&
+      !isDirectPhotoCategoryPath(categoryPath)
+  )
   const seenCategoryPaths = new Set<string>()
 
-  if (categoryPaths.length !== categories.length) {
+  if (unknownCategoryPaths.length > 0) {
+    throw new Error("Category order can only include active categories.")
+  }
+
+  if (orderedKnownCategoryPaths.length !== categories.length) {
     throw new Error("Category order must include every category.")
   }
 
-  for (const [index, categoryPath] of categoryPaths.entries()) {
+  for (const [index, categoryPath] of orderedKnownCategoryPaths.entries()) {
     if (seenCategoryPaths.has(categoryPath)) {
       throw new Error("Category order cannot include the same category twice.")
     }
@@ -992,6 +1114,35 @@ async function getNextAssetRank(
   return nextRank
 }
 
+function isDirectPhotoCategoryPath(path: string) {
+  const segments = path.split("/")
+
+  return (
+    segments.length === 2 &&
+    segments[0] === ROOT_FOLDER &&
+    segments[1]?.toLowerCase() === DIRECT_PHOTO_CATEGORY_NAME.toLowerCase()
+  )
+}
+
+function getVirtualDirectPhotoCategory(
+  categoryPath: string
+): MediaCategoryFolder | null {
+  if (!isDirectPhotoCategoryPath(categoryPath)) {
+    return null
+  }
+
+  return {
+    path: DIRECT_PHOTO_CATEGORY_PATH,
+    name: DIRECT_PHOTO_CATEGORY_NAME,
+    displayPath: DIRECT_PHOTO_CATEGORY_NAME,
+    orderRank: ORDER_STEP,
+    coverShootPath: null,
+    cloudinaryExternalId: null,
+    cloudinaryCreatedAt: null,
+    cloudinaryUpdatedAt: null,
+  }
+}
+
 async function buildCategorySummaries(
   ctx: QueryCtx,
   categories: MediaCategory[]
@@ -1000,23 +1151,54 @@ async function buildCategorySummaries(
   const summaries = []
 
   for (const category of categories) {
-    const categoryShoots = shoots.filter(
-      (shoot) => shoot.categoryPath === category.path
-    )
-    const selectedShoot =
-      categoryShoots.find((shoot) => shoot.path === category.coverShootPath) ||
-      categoryShoots[0] ||
-      null
-    const coverAsset = selectedShoot
-      ? await getShootCoverAsset(ctx, selectedShoot)
-      : null
+    const isDirectCategory = isDirectPhotoCategoryPath(category.path)
+    const categoryShoots = isDirectCategory
+      ? []
+      : shoots.filter((shoot) => shoot.categoryPath === category.path)
+    const directCategoryAssets = isDirectCategory
+      ? await listActiveAssetsForShoot(ctx, category.path, MAX_ASSETS)
+      : []
+    const selectedShoot = isDirectCategory
+      ? null
+      : categoryShoots.find(
+          (shoot) => shoot.path === category.coverShootPath
+        ) ||
+        categoryShoots[0] ||
+        null
+    const coverAsset = isDirectCategory
+      ? directCategoryAssets[0] || null
+      : selectedShoot
+        ? await getShootCoverAsset(ctx, selectedShoot)
+        : null
 
     summaries.push({
       name: category.name,
       path: category.path,
       orderRank: category.orderRank,
       cover: coverAsset ? assetView(coverAsset) : null,
-      shootCount: categoryShoots.length,
+      shootCount: isDirectCategory ? 0 : categoryShoots.length,
+      assetCount: directCategoryAssets.length,
+      isDirectPhotoCategory: isDirectCategory,
+    })
+  }
+
+  if (
+    !categories.some((category) => isDirectPhotoCategoryPath(category.path))
+  ) {
+    const assets = await listActiveAssetsForShoot(
+      ctx,
+      DIRECT_PHOTO_CATEGORY_PATH,
+      MAX_ASSETS
+    )
+
+    summaries.push({
+      name: DIRECT_PHOTO_CATEGORY_NAME,
+      path: DIRECT_PHOTO_CATEGORY_PATH,
+      orderRank: (summaries.at(-1)?.orderRank || 0) + ORDER_STEP,
+      cover: assets[0] ? assetView(assets[0]) : null,
+      shootCount: 0,
+      assetCount: assets.length,
+      isDirectPhotoCategory: true,
     })
   }
 
@@ -1198,7 +1380,7 @@ function rootFolderView() {
   }
 }
 
-function categoryFolderView(category: MediaCategory) {
+function categoryFolderView(category: MediaCategoryFolder) {
   return {
     name: category.name,
     path: category.path,
@@ -1266,6 +1448,29 @@ function assetView(asset: MediaAsset) {
   }
 }
 
+function siteAssetView(asset: SiteAsset) {
+  return {
+    key: asset.key,
+    assetId: asset.cloudinaryAssetId,
+    publicId: asset.publicId,
+    folder: asset.assetFolder,
+    displayName: asset.displayName,
+    format: asset.format,
+    resourceType: asset.resourceType,
+    bytes: asset.bytes,
+    width: asset.width,
+    height: asset.height,
+    aspectRatio: asset.aspectRatio,
+    secureUrl: asset.secureUrl,
+    thumbnailUrl: asset.thumbnailUrl,
+    previewUrl: asset.previewUrl,
+    displayFolder: asset.displayFolder,
+    createdAt: asset.createdAt,
+    context: asset.context,
+    updatedAt: asset.updatedAt,
+  }
+}
+
 function normalizeSiteContentKey(key: string) {
   const normalizedKey = key.trim()
 
@@ -1281,6 +1486,47 @@ async function getSiteContentByKey(ctx: QueryCtx | MutationCtx, key: string) {
     .query("siteContent")
     .withIndex("by_key", (q) => q.eq("key", normalizeSiteContentKey(key)))
     .unique()
+}
+
+async function getSiteAssetByKey(ctx: QueryCtx | MutationCtx, key: string) {
+  return await ctx.db
+    .query("siteAssets")
+    .withIndex("by_key", (q) => q.eq("key", normalizeSiteContentKey(key)))
+    .unique()
+}
+
+async function getActiveSiteAssetByKey(
+  ctx: QueryCtx | MutationCtx,
+  key: string
+) {
+  const asset = await getSiteAssetByKey(ctx, key)
+
+  return asset && asset.deletedAt === null ? asset : null
+}
+
+function normalizeSiteAsset(asset: SiteAssetInput) {
+  if (!asset.assetId || !asset.publicId || !asset.secureUrl) {
+    throw new Error("Site asset metadata is incomplete.")
+  }
+
+  return {
+    cloudinaryAssetId: asset.assetId,
+    publicId: asset.publicId,
+    assetFolder: asset.folder,
+    displayName: asset.displayName,
+    format: asset.format,
+    resourceType: asset.resourceType,
+    bytes: asset.bytes,
+    width: asset.width,
+    height: asset.height,
+    aspectRatio: asset.aspectRatio,
+    secureUrl: asset.secureUrl,
+    thumbnailUrl: asset.thumbnailUrl,
+    previewUrl: asset.previewUrl,
+    displayFolder: asset.displayFolder,
+    createdAt: asset.createdAt,
+    context: asset.context,
+  }
 }
 
 function normalizeSiteContentBlocks(

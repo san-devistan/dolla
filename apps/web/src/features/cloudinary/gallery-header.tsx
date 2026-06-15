@@ -135,7 +135,7 @@ function DesktopGalleryHeader<TCategory extends GalleryCategory>({
               currentPathname === getPricingRoute(isAdminMode)
             )}
           >
-            Pricing
+            Prix
           </Link>
           <Link
             to={getAboutRoute(isAdminMode)}
@@ -143,7 +143,7 @@ function DesktopGalleryHeader<TCategory extends GalleryCategory>({
               currentPathname === getAboutRoute(isAdminMode)
             )}
           >
-            About
+            A propos
           </Link>
           <Link
             to={getContactRoute(isAdminMode)}

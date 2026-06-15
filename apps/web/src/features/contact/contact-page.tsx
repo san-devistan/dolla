@@ -79,6 +79,7 @@ function ContactPage({
           isAdminMode ? "pt-5 pb-14" : "flex-1 justify-center py-10"
         )}
       >
+        <h1 className="sr-only">Contact photographe Paris</h1>
         <ContactInfo settings={settings} />
         <ContactForm formTitle={settings.formTitle} />
       </section>

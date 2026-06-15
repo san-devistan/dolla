@@ -20,9 +20,9 @@ function ContactInfo({ settings }: { settings: ContactSettings }) {
   return (
     <section className="flex w-full min-w-0 flex-col items-center justify-center gap-8 md:min-w-[360px] md:gap-12">
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="font-sans text-xl font-semibold tracking-[0.08em] uppercase">
+        <h2 className="font-sans text-xl font-semibold tracking-[0.08em] uppercase">
           {settings.reservationTitle}
-        </h1>
+        </h2>
         <a
           href={`mailto:${settings.reservationEmail}`}
           className="font-heading text-lg transition-colors hover:text-brand"
@@ -32,9 +32,9 @@ function ContactInfo({ settings }: { settings: ContactSettings }) {
       </div>
       <Separator className="max-w-xs bg-black/35" />
       <div className="flex flex-col items-center gap-4 text-center">
-        <h1 className="font-sans text-xl font-semibold tracking-[0.08em] uppercase">
+        <h2 className="font-sans text-xl font-semibold tracking-[0.08em] uppercase">
           {settings.socialsTitle}
-        </h1>
+        </h2>
         <ContactSocialLinks links={settings.socialLinks} />
       </div>
     </section>

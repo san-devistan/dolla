@@ -1,11 +1,14 @@
 import {
   createCloudinaryFolderFn,
   deleteCloudinaryFolderFn,
+  deleteCloudinaryShootAssetsFn,
   getCloudinaryCategoryFn,
   moveCloudinaryShootsFn,
   renameCloudinaryFolderFn,
+  reorderCloudinaryAssetsFn,
   reorderCloudinaryShootsFn,
   setCloudinaryCategoryCoverFn,
+  setCloudinaryHomeCarouselAssetFn,
 } from "@/features/cloudinary/cloudinary.functions"
 import { GalleryHeader } from "@/features/cloudinary/gallery-header"
 import {
@@ -13,18 +16,34 @@ import {
   getImageLoadingProps,
 } from "@/features/cloudinary/image-delivery"
 import { ProgressiveImage } from "@/features/cloudinary/progressive-image"
+import { prepareImageUploadFiles } from "@/features/cloudinary/upload-image-processing"
 import {
   getMediaCategoryRoute,
   getMediaHomeRoute,
   getMediaShootRoute,
 } from "@/lib/admin-routes"
 import type {
+  CloudinaryAsset,
   CloudinaryCategoryPage,
   CloudinaryConnection,
   CloudinaryFolder,
   CloudinaryShootSummary,
 } from "@/lib/cloudinary.server"
+import { isDirectPhotoCategoryName } from "@/lib/direct-photo-category"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
+import { createCategorySeoHead } from "@/lib/seo"
+import {
+  type AssetDropPosition,
+  type AssetDropTarget,
+  PhotoMasonry,
+  PhotoViewer,
+  SelectedPhotosActionBar,
+  UploadPhotosButton,
+  getAssetLayoutOrder,
+  moveAssetToColumnEnd,
+  moveAssetToDropTarget,
+  useMasonryColumnCount,
+} from "@/routes/$category/$shoot"
 import {
   createFileRoute,
   Link,
@@ -82,6 +101,7 @@ import {
   type ChangeEvent,
   type DragEvent,
   type FormEvent,
+  type RefObject,
   useEffect,
   useMemo,
   useRef,
@@ -92,17 +112,40 @@ type ShootDropTarget = {
   shootPath: string
 }
 
+type CategoryAssetDropMove = {
+  assets: CloudinaryAsset[]
+  columnCount: number
+  draggedAssetId: string
+  dropPosition: AssetDropPosition
+  targetAssetId: string
+}
+
+const ASSET_ORDER_STEP = 1000
+
 export const Route = createFileRoute("/$category")({
   loader: ({ params }) =>
     getCloudinaryCategoryFn({
       data: { categoryName: params.category },
     }),
+  head: ({ loaderData, match, matches, params }) => {
+    const leafMatch = matches.at(-1)
+
+    if (leafMatch?.id !== match.id) {
+      return {}
+    }
+
+    return createCategorySeoHead(loaderData, params.category)
+  },
   component: PublicCategoryPage,
 })
 
 function PublicCategoryPage() {
   const initialCategoryPage = Route.useLoaderData()
   const { category } = Route.useParams()
+
+  if (!initialCategoryPage) {
+    throw new Error("Category failed to load.")
+  }
 
   return (
     <CategoryPage
@@ -144,39 +187,67 @@ function CategoryPage({
   const [selectedShootPaths, setSelectedShootPaths] = useState<Set<string>>(
     () => new Set()
   )
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(
+    () => new Set()
+  )
+  const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null)
+  const [assetDropTarget, setAssetDropTarget] =
+    useState<AssetDropTarget | null>(null)
+  const [activeViewerAssetId, setActiveViewerAssetId] = useState<string | null>(
+    null
+  )
   const [moveTargetCategoryPath, setMoveTargetCategoryPath] = useState("")
   const [isBusy, setIsBusy] = useState(false)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+  const masonryColumnCount = useMasonryColumnCount()
 
   const getCategory = useServerFn(getCloudinaryCategoryFn)
   const createFolder = useServerFn(createCloudinaryFolderFn)
   const renameFolder = useServerFn(renameCloudinaryFolderFn)
   const deleteFolder = useServerFn(deleteCloudinaryFolderFn)
+  const deleteShootAssets = useServerFn(deleteCloudinaryShootAssetsFn)
   const moveShoots = useServerFn(moveCloudinaryShootsFn)
+  const reorderAssets = useServerFn(reorderCloudinaryAssetsFn)
   const reorderShoots = useServerFn(reorderCloudinaryShootsFn)
   const setCategoryCover = useServerFn(setCloudinaryCategoryCoverFn)
+  const setHomeCarouselAsset = useServerFn(setCloudinaryHomeCarouselAssetFn)
   const selectedCategory = categoryPage.category || undefined
   const selectedCategoryPath = selectedCategory?.path
+  const isDirectPhotoCategory = isDirectPhotoCategoryName(
+    selectedCategory?.name
+  )
   const shoots = categoryPage.shoots
+  const assets = categoryPage.assets
   const moveTargetCategories = useMemo(() => {
     if (!selectedCategoryPath) {
       return []
     }
 
     return categoryPage.categories.filter(
-      (categorySummary) => categorySummary.path !== selectedCategoryPath
+      (categorySummary) =>
+        categorySummary.path !== selectedCategoryPath &&
+        !categorySummary.isDirectPhotoCategory
     )
   }, [categoryPage.categories, selectedCategoryPath])
   const canMutate =
     categoryPage.connection.configured &&
     !categoryPage.connection.error &&
     !isBusy
-  const canCreateShoot = canMutate && Boolean(selectedCategory)
+  const canCreateShoot =
+    canMutate && Boolean(selectedCategory) && !isDirectPhotoCategory
   const canOrganizeShoots =
-    canMutate && selectedCategory?.orderRank !== undefined
-  const canRenameCategory = canMutate && Boolean(selectedCategory)
+    canMutate &&
+    selectedCategory?.orderRank !== undefined &&
+    !isDirectPhotoCategory
+  const canRenameCategory =
+    canMutate && Boolean(selectedCategory) && !isDirectPhotoCategory
   const canDeleteSelectedShoots = canMutate && selectedShootPaths.size > 0
   const canMoveSelectedShoots =
     canMutate && selectedShootPaths.size > 0 && moveTargetCategories.length > 0
+  const canUploadCategoryPhotos =
+    canMutate && Boolean(selectedCategory) && isDirectPhotoCategory
+  const canOrganizeCategoryPhotos = canUploadCategoryPhotos
+  const canDeleteSelectedAssets = canMutate && selectedAssetIds.size > 0
 
   useEffect(() => {
     setCategoryPage(initialCategoryPage)
@@ -185,6 +256,10 @@ function CategoryPage({
     setDraggingShootPath(null)
     setShootDropTarget(null)
     setSelectedShootPaths(new Set())
+    setSelectedAssetIds(new Set())
+    setDraggingAssetId(null)
+    setAssetDropTarget(null)
+    setActiveViewerAssetId(null)
     setMoveTargetCategoryPath("")
   }, [initialCategoryPage])
 
@@ -280,11 +355,12 @@ function CategoryPage({
   }
 
   async function uploadFilesToShoot(shootPath: string, files: File[]) {
+    const uploadFiles = await prepareImageUploadFiles(files)
     const formData = new FormData()
 
     formData.set("folderPath", shootPath)
 
-    for (const file of files) {
+    for (const file of uploadFiles) {
       formData.append("files", file)
     }
 
@@ -296,6 +372,83 @@ function CategoryPage({
 
     if (!response.ok) {
       throw new Error(getUploadError(result) || "Upload failed.")
+    }
+  }
+
+  function handleCategoryPhotoUploadClick() {
+    uploadInputRef.current?.click()
+  }
+
+  function handleCategoryPhotoUploadFileChange(
+    event: ChangeEvent<HTMLInputElement>
+  ) {
+    const files = Array.from(event.target.files || [])
+
+    if (files.length === 0 || !selectedCategory) {
+      return
+    }
+
+    const uploadPromise = uploadSelectedCategoryPhotos(files)
+
+    toast.promise(uploadPromise, {
+      loading:
+        files.length === 1
+          ? "Preparing and uploading photo..."
+          : `Preparing and uploading ${files.length} photos...`,
+      success: files.length === 1 ? "Photo uploaded" : "Photos uploaded",
+      error: (uploadError) => getErrorMessage(uploadError),
+    })
+
+    void uploadPromise.catch(() => undefined)
+  }
+
+  async function uploadSelectedCategoryPhotos(files: File[]) {
+    if (!selectedCategory) {
+      return
+    }
+
+    if (files.length === 0) {
+      toast.error("Choose at least one file to upload.")
+      return
+    }
+
+    setIsBusy(true)
+
+    try {
+      const uploadFiles = await prepareImageUploadFiles(files)
+      const formData = new FormData()
+
+      formData.set("folderPath", selectedCategory.path)
+
+      for (const file of uploadFiles) {
+        formData.append("files", file)
+      }
+
+      const response = await fetch("/api/cloudinary/upload", {
+        method: "POST",
+        body: formData,
+      })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(getUploadError(result) || "Upload failed.")
+      }
+
+      if (uploadInputRef.current) {
+        uploadInputRef.current.value = ""
+      }
+
+      const nextCategoryPage = await getCategory({
+        data: { categoryName: selectedCategory.name, refresh: true },
+      })
+
+      setCategoryPage(nextCategoryPage)
+
+      if (nextCategoryPage.connection.error) {
+        throw new Error(nextCategoryPage.connection.error)
+      }
+    } finally {
+      setIsBusy(false)
     }
   }
 
@@ -631,6 +784,304 @@ function CategoryPage({
       })
   }
 
+  function toggleAssetSelection(assetId: string, selected?: boolean) {
+    setSelectedAssetIds((currentAssetIds) => {
+      const nextAssetIds = new Set(currentAssetIds)
+      const shouldSelect = selected ?? !nextAssetIds.has(assetId)
+
+      if (shouldSelect) {
+        nextAssetIds.add(assetId)
+      } else {
+        nextAssetIds.delete(assetId)
+      }
+
+      return nextAssetIds
+    })
+  }
+
+  function clearAssetSelection() {
+    setSelectedAssetIds(new Set())
+  }
+
+  function handleAssetDragStart(
+    event: DragEvent<HTMLElement>,
+    assetId: string
+  ) {
+    if (!canOrganizeCategoryPhotos) {
+      return
+    }
+
+    event.dataTransfer.effectAllowed = "move"
+    event.dataTransfer.setData("text/plain", assetId)
+    setDraggingAssetId(assetId)
+  }
+
+  function handleAssetDragOver(event: DragEvent<HTMLElement>, assetId: string) {
+    if (!canOrganizeCategoryPhotos || draggingAssetId === assetId) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+    const position = getAssetDropPosition(event)
+
+    setAssetDropTarget((currentDropTarget) => {
+      if (
+        currentDropTarget?.type === "asset" &&
+        currentDropTarget.assetId === assetId &&
+        currentDropTarget.position === position
+      ) {
+        return currentDropTarget
+      }
+
+      return { assetId, position, type: "asset" }
+    })
+  }
+
+  function handleAssetInsertionDragOver(
+    event: DragEvent<HTMLElement>,
+    assetId: string,
+    position: AssetDropPosition
+  ) {
+    if (!canOrganizeCategoryPhotos || draggingAssetId === assetId) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+
+    setAssetDropTarget((currentDropTarget) => {
+      if (
+        currentDropTarget?.type === "asset" &&
+        currentDropTarget.assetId === assetId &&
+        currentDropTarget.position === position
+      ) {
+        return currentDropTarget
+      }
+
+      return { assetId, position, type: "asset" }
+    })
+  }
+
+  function handleAssetDrop(event: DragEvent<HTMLElement>, assetId: string) {
+    if (!canOrganizeCategoryPhotos) {
+      return
+    }
+
+    event.preventDefault()
+
+    const draggedAssetId =
+      event.dataTransfer.getData("text/plain") || draggingAssetId
+    const dropPosition =
+      assetDropTarget?.type === "asset" && assetDropTarget.assetId === assetId
+        ? assetDropTarget.position
+        : getAssetDropPosition(event)
+
+    if (!draggedAssetId || draggedAssetId === assetId) {
+      return
+    }
+
+    const nextAssets = moveAssetToDropTarget({
+      assets,
+      columnCount: masonryColumnCount,
+      draggedAssetId,
+      targetAssetId: assetId,
+      dropPosition,
+    } satisfies CategoryAssetDropMove)
+
+    if (!nextAssets) {
+      return
+    }
+
+    saveAssetOrder(nextAssets)
+  }
+
+  function handleColumnDragOver(
+    event: DragEvent<HTMLElement>,
+    columnIndex: number
+  ) {
+    if (!canOrganizeCategoryPhotos || !draggingAssetId) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+
+    setAssetDropTarget((currentDropTarget) => {
+      if (
+        currentDropTarget?.type === "column-end" &&
+        currentDropTarget.columnIndex === columnIndex
+      ) {
+        return currentDropTarget
+      }
+
+      return { columnIndex, type: "column-end" }
+    })
+  }
+
+  function handleColumnDrop(
+    event: DragEvent<HTMLElement>,
+    columnIndex: number
+  ) {
+    if (!canOrganizeCategoryPhotos) {
+      return
+    }
+
+    event.preventDefault()
+
+    const draggedAssetId =
+      event.dataTransfer.getData("text/plain") || draggingAssetId
+
+    if (!draggedAssetId) {
+      return
+    }
+
+    const nextAssets = moveAssetToColumnEnd(
+      assets,
+      draggedAssetId,
+      columnIndex,
+      masonryColumnCount
+    )
+
+    if (!nextAssets) {
+      return
+    }
+
+    saveAssetOrder(nextAssets)
+  }
+
+  function handleAssetDragEnd() {
+    setDraggingAssetId(null)
+    setAssetDropTarget(null)
+  }
+
+  function saveAssetOrder(nextAssets: CloudinaryAsset[]) {
+    if (!selectedCategory) {
+      return
+    }
+
+    const previousCategoryPage = categoryPage
+    const orderedAssets = nextAssets.map((asset, index) => ({
+      ...asset,
+      orderRank: (index + 1) * ASSET_ORDER_STEP,
+    }))
+
+    setCategoryPage({
+      ...categoryPage,
+      assets: orderedAssets,
+    })
+    setDraggingAssetId(null)
+    setAssetDropTarget(null)
+
+    void reorderAssets({
+      data: {
+        shootPath: selectedCategory.path,
+        selectedFolder: selectedCategory.path,
+        assetIds: orderedAssets.map((asset) => asset.assetId),
+        assetLayouts: getAssetLayoutOrder(orderedAssets, masonryColumnCount),
+      },
+    })
+      .then(() => {
+        toast.success("Photo order saved")
+
+        return undefined
+      })
+      .catch((orderError) => {
+        setCategoryPage(previousCategoryPage)
+        toast.error(getErrorMessage(orderError))
+
+        return undefined
+      })
+  }
+
+  function handleDeleteSelectedAssets() {
+    if (!selectedCategory) {
+      return
+    }
+
+    const assetIds = Array.from(selectedAssetIds)
+
+    if (assetIds.length === 0) {
+      return
+    }
+
+    const deleteAssetsPromise = performCategoryAction(async () => {
+      await deleteShootAssets({
+        data: {
+          shootPath: selectedCategory.path,
+          selectedFolder: selectedCategory.path,
+          assetIds,
+        },
+      })
+
+      return await getCategory({
+        data: { categoryName: selectedCategory.name, refresh: true },
+      })
+    })
+
+    toast.promise(deleteAssetsPromise, {
+      loading: "Deleting photos...",
+      success: assetIds.length === 1 ? "Photo deleted" : "Photos deleted",
+      error: (deleteError) => getErrorMessage(deleteError),
+    })
+
+    void deleteAssetsPromise
+      .then(() => {
+        clearAssetSelection()
+
+        return undefined
+      })
+      .catch(() => undefined)
+  }
+
+  function handleToggleHomeCarouselAsset(assetId: string, selected: boolean) {
+    const previousCategoryPage = categoryPage
+
+    setCategoryPage({
+      ...categoryPage,
+      assets: assets.map((asset) =>
+        asset.assetId === assetId
+          ? {
+              ...asset,
+              homeCarouselOrderRank: selected
+                ? asset.homeCarouselOrderRank || ASSET_ORDER_STEP
+                : undefined,
+            }
+          : asset
+      ),
+    })
+
+    void setHomeCarouselAsset({
+      data: {
+        assetId,
+        selected,
+      },
+    })
+      .then(() => {
+        toast.success(
+          selected
+            ? "Homepage carousel photo saved"
+            : "Homepage carousel photo removed"
+        )
+
+        return undefined
+      })
+      .catch((homeCarouselError) => {
+        setCategoryPage(previousCategoryPage)
+        toast.error(getErrorMessage(homeCarouselError))
+
+        return undefined
+      })
+  }
+
+  function openAssetViewer(assetId: string) {
+    setActiveViewerAssetId(assetId)
+  }
+
+  function closeAssetViewer() {
+    setActiveViewerAssetId(null)
+  }
+
   async function performCategoryAction(
     action: () => Promise<CloudinaryCategoryPage>
   ) {
@@ -677,6 +1128,50 @@ function CategoryPage({
         <div className="flex flex-1 flex-col">
           <Outlet />
         </div>
+      ) : selectedCategory && isDirectPhotoCategory ? (
+        <>
+          <DirectCategoryPhotoSurface
+            assets={assets}
+            canOrganizeAssets={canOrganizeCategoryPhotos}
+            canUpload={canUploadCategoryPhotos}
+            category={selectedCategory}
+            columnCount={masonryColumnCount}
+            connection={categoryPage.connection}
+            draggingAssetId={draggingAssetId}
+            dropTarget={assetDropTarget}
+            isAdminMode={isAdminMode}
+            isBusy={isBusy}
+            selectedAssetIds={selectedAssetIds}
+            uploadInputRef={uploadInputRef}
+            onAssetDragEnd={handleAssetDragEnd}
+            onAssetDragOver={handleAssetDragOver}
+            onAssetDragStart={handleAssetDragStart}
+            onAssetDrop={handleAssetDrop}
+            onAssetInsertionDragOver={handleAssetInsertionDragOver}
+            onAssetSelectionChange={toggleAssetSelection}
+            onColumnDragOver={handleColumnDragOver}
+            onColumnDrop={handleColumnDrop}
+            onOpenAsset={openAssetViewer}
+            onToggleHomeCarouselAsset={handleToggleHomeCarouselAsset}
+            onUploadClick={handleCategoryPhotoUploadClick}
+            onUploadFileChange={handleCategoryPhotoUploadFileChange}
+          />
+          <PhotoViewer
+            activeAssetId={activeViewerAssetId}
+            assets={assets}
+            onClose={closeAssetViewer}
+            onSelectAsset={setActiveViewerAssetId}
+          />
+          {isAdminMode && selectedAssetIds.size > 0 ? (
+            <SelectedPhotosActionBar
+              canDelete={canDeleteSelectedAssets}
+              isBusy={isBusy}
+              selectedCount={selectedAssetIds.size}
+              onClearSelection={clearAssetSelection}
+              onDeleteSelected={handleDeleteSelectedAssets}
+            />
+          ) : null}
+        </>
       ) : selectedCategory ? (
         <>
           <CategoryShootSurface
@@ -736,6 +1231,110 @@ function CategoryPage({
 }
 
 export { CategoryPage }
+
+function DirectCategoryPhotoSurface({
+  assets,
+  canOrganizeAssets,
+  canUpload,
+  category,
+  columnCount,
+  connection,
+  draggingAssetId,
+  dropTarget,
+  isAdminMode,
+  isBusy,
+  selectedAssetIds,
+  uploadInputRef,
+  onAssetDragEnd,
+  onAssetDragOver,
+  onAssetDragStart,
+  onAssetDrop,
+  onAssetInsertionDragOver,
+  onAssetSelectionChange,
+  onColumnDragOver,
+  onColumnDrop,
+  onOpenAsset,
+  onToggleHomeCarouselAsset,
+  onUploadClick,
+  onUploadFileChange,
+}: {
+  assets: CloudinaryAsset[]
+  canOrganizeAssets: boolean
+  canUpload: boolean
+  category: CloudinaryFolder
+  columnCount: number
+  connection: CloudinaryConnection
+  draggingAssetId: string | null
+  dropTarget: AssetDropTarget | null
+  isAdminMode: boolean
+  isBusy: boolean
+  selectedAssetIds: Set<string>
+  uploadInputRef: RefObject<HTMLInputElement | null>
+  onAssetDragEnd: () => void
+  onAssetDragOver: (event: DragEvent<HTMLElement>, assetId: string) => void
+  onAssetDragStart: (event: DragEvent<HTMLElement>, assetId: string) => void
+  onAssetDrop: (event: DragEvent<HTMLElement>, assetId: string) => void
+  onAssetInsertionDragOver: (
+    event: DragEvent<HTMLElement>,
+    assetId: string,
+    position: AssetDropPosition
+  ) => void
+  onAssetSelectionChange: (assetId: string, selected?: boolean) => void
+  onColumnDragOver: (event: DragEvent<HTMLElement>, columnIndex: number) => void
+  onColumnDrop: (event: DragEvent<HTMLElement>, columnIndex: number) => void
+  onOpenAsset: (assetId: string) => void
+  onToggleHomeCarouselAsset: (assetId: string, selected: boolean) => void
+  onUploadClick: () => void
+  onUploadFileChange: (event: ChangeEvent<HTMLInputElement>) => void
+}) {
+  return (
+    <>
+      <section className="mx-auto w-full max-w-[1540px] px-4 pb-4 sm:px-6 md:pt-0 md:pb-8 lg:px-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
+            {category.name}
+          </h1>
+          {isAdminMode ? (
+            <div className="flex flex-wrap gap-2">
+              <UploadPhotosButton
+                canUpload={canUpload}
+                isBusy={isBusy}
+                uploadInputRef={uploadInputRef}
+                onUploadClick={onUploadClick}
+                onUploadFileChange={onUploadFileChange}
+              />
+            </div>
+          ) : null}
+        </div>
+        {isAdminMode ? <ConnectionNotice connection={connection} /> : null}
+      </section>
+      <PhotoMasonry
+        assets={assets}
+        canOrganizeAssets={canOrganizeAssets}
+        columnCount={columnCount}
+        draggingAssetId={draggingAssetId}
+        dropTarget={dropTarget}
+        emptyMessage="No photos in this category yet."
+        isAdminMode={isAdminMode}
+        isBusy={isBusy}
+        selectedAssetIds={selectedAssetIds}
+        showCoverControl={false}
+        shoot={category}
+        onAssetDragEnd={onAssetDragEnd}
+        onAssetDragOver={onAssetDragOver}
+        onAssetDragStart={onAssetDragStart}
+        onAssetDrop={onAssetDrop}
+        onAssetInsertionDragOver={onAssetInsertionDragOver}
+        onAssetSelectionChange={onAssetSelectionChange}
+        onColumnDragOver={onColumnDragOver}
+        onColumnDrop={onColumnDrop}
+        onOpenAsset={onOpenAsset}
+        onSetShootCover={() => undefined}
+        onToggleHomeCarouselAsset={onToggleHomeCarouselAsset}
+      />
+    </>
+  )
+}
 
 function CategoryShootSurface({
   canCreateShoot,
@@ -822,7 +1421,7 @@ function CategoryShootSurface({
       )}
     >
       {isAdminMode ? <ConnectionNotice connection={connection} /> : null}
-      <div className="mt-2 mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mt-3 md:mb-7">
+      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mb-7">
         <div className="min-w-0">
           {isRenamingCategory ? (
             <form
@@ -899,7 +1498,7 @@ function CategoryShootSurface({
         ) : null}
       </div>
       {shoots.length > 0 || isAdminMode ? (
-        <div className="grid gap-x-14 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 sm:gap-x-14 sm:gap-y-12 lg:grid-cols-3">
           {shoots.map((shoot, index) => (
             <ShootCard
               key={shoot.path}
@@ -1484,6 +2083,15 @@ function swapShoots(
   nextShoots[toIndex] = draggedShoot
 
   return nextShoots
+}
+
+function getAssetDropPosition(
+  event: DragEvent<HTMLElement>
+): AssetDropPosition {
+  const bounds = event.currentTarget.getBoundingClientRect()
+  const midpoint = bounds.top + bounds.height / 2
+
+  return event.clientY < midpoint ? "before" : "after"
 }
 
 function getErrorMessage(error: unknown) {

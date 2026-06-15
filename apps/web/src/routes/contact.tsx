@@ -1,21 +1,11 @@
 import { ContactPage } from "@/features/contact/contact-page"
 import { getContactPageFn } from "@/features/contact/contact.functions"
+import { createContactSeoHead } from "@/lib/seo"
 import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/contact")({
   loader: () => getContactPageFn(),
-  head: () => ({
-    meta: [
-      {
-        title: "Contact | Dolla Shashin",
-      },
-      {
-        name: "description",
-        content:
-          "Contactez Dolla Shashin pour reserver une seance photo, un mariage, un evenement ou un projet creatif.",
-      },
-    ],
-  }),
+  head: () => createContactSeoHead(),
   component: PublicContactRoute,
 })
 

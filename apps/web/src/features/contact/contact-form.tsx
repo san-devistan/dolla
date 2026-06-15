@@ -96,9 +96,9 @@ function ContactForm({ formTitle }: { formTitle: string }) {
 
   return (
     <section className="flex w-full min-w-0 flex-col items-center justify-center md:min-w-[360px]">
-      <h1 className="mb-8 font-sans text-xl font-semibold tracking-[0.08em] uppercase">
+      <h2 className="mb-8 font-sans text-xl font-semibold tracking-[0.08em] uppercase">
         {formTitle}
-      </h1>
+      </h2>
       <form
         className="flex w-full max-w-xs flex-col gap-4"
         onSubmit={handleSubmit}
