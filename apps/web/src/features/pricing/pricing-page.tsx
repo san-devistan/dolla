@@ -59,7 +59,7 @@ function PricingPage({
       />
       <section className="mx-auto flex w-full max-w-[980px] flex-1 flex-col justify-center px-4 py-10 font-heading md:px-8">
         <h1 className="text-xl font-semibold tracking-[0.1em] uppercase md:text-3xl">
-          Tarifs
+          Tarifs photographe Paris
         </h1>
         <PricingList
           items={isAdminMode ? draftItems : pricing.items}

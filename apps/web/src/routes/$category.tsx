@@ -1,3 +1,4 @@
+import { NotFoundPage } from "@/components/not-found-page"
 import {
   createCloudinaryFolderFn,
   deleteCloudinaryFolderFn,
@@ -31,7 +32,13 @@ import type {
 } from "@/lib/cloudinary.server"
 import { isDirectPhotoCategoryName } from "@/lib/direct-photo-category"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
-import { createCategorySeoHead } from "@/lib/seo"
+import {
+  NOINDEX_ROBOTS,
+  createCategorySeoHead,
+  createNoindexSeoHead,
+  getCategorySeoDescription,
+  getCategorySeoTitle,
+} from "@/lib/seo"
 import {
   type AssetDropPosition,
   type AssetDropTarget,
@@ -48,6 +55,7 @@ import {
   createFileRoute,
   Link,
   Outlet,
+  notFound,
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router"
@@ -123,11 +131,26 @@ type CategoryAssetDropMove = {
 const ASSET_ORDER_STEP = 1000
 
 export const Route = createFileRoute("/$category")({
-  loader: ({ params }) =>
-    getCloudinaryCategoryFn({
+  loader: async ({ params }) => {
+    const categoryPage = await getCloudinaryCategoryFn({
       data: { categoryName: params.category },
-    }),
+    })
+
+    if (!categoryPage.category) {
+      throw notFound({
+        headers: {
+          "X-Robots-Tag": NOINDEX_ROBOTS,
+        },
+      })
+    }
+
+    return categoryPage
+  },
   head: ({ loaderData, match, matches, params }) => {
+    if (isNotFoundRouteMatch(match)) {
+      return createNoindexSeoHead("Page introuvable | Dolla Shashin")
+    }
+
     const leafMatch = matches.at(-1)
 
     if (leafMatch?.id !== match.id) {
@@ -136,8 +159,19 @@ export const Route = createFileRoute("/$category")({
 
     return createCategorySeoHead(loaderData, params.category)
   },
+  headers: ({ match }) =>
+    isNotFoundRouteMatch(match)
+      ? {
+          "X-Robots-Tag": NOINDEX_ROBOTS,
+        }
+      : undefined,
+  notFoundComponent: NotFoundPage,
   component: PublicCategoryPage,
 })
+
+function isNotFoundRouteMatch(match: { status?: string }) {
+  return match.status === "notFound"
+}
 
 function PublicCategoryPage() {
   const initialCategoryPage = Route.useLoaderData()
@@ -1291,9 +1325,15 @@ function DirectCategoryPhotoSurface({
     <>
       <section className="mx-auto w-full max-w-[1540px] px-4 pb-4 sm:px-6 md:pt-0 md:pb-8 lg:px-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
-            {category.name}
-          </h1>
+          <div className="min-w-0">
+            <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
+              {getCategoryHeading(category.name, isAdminMode)}
+            </h1>
+            <PublicCategoryDescription
+              categoryName={category.name}
+              isAdminMode={isAdminMode}
+            />
+          </div>
           {isAdminMode ? (
             <div className="flex flex-wrap gap-2">
               <UploadPhotosButton
@@ -1459,9 +1499,13 @@ function CategoryShootSurface({
             </form>
           ) : (
             <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
-              {category.name}
+              {getCategoryHeading(category.name, isAdminMode)}
             </h1>
           )}
+          <PublicCategoryDescription
+            categoryName={category.name}
+            isAdminMode={isAdminMode}
+          />
         </div>
         {isAdminMode ? (
           <div className="flex flex-wrap gap-2">
@@ -2030,6 +2074,28 @@ function MissingCategory({ categoryName }: { categoryName: string }) {
       </h1>
     </section>
   )
+}
+
+function PublicCategoryDescription({
+  categoryName,
+  isAdminMode,
+}: {
+  categoryName: string
+  isAdminMode: boolean
+}) {
+  if (isAdminMode) {
+    return null
+  }
+
+  return (
+    <p className="mt-3 max-w-3xl font-sans text-sm leading-relaxed text-muted-foreground md:text-base">
+      {getCategorySeoDescription(categoryName)}
+    </p>
+  )
+}
+
+function getCategoryHeading(categoryName: string, isAdminMode: boolean) {
+  return isAdminMode ? categoryName : getCategorySeoTitle(categoryName)
 }
 
 function ConnectionNotice({

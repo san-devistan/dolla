@@ -23,7 +23,6 @@ function getStaticSitemapEntries() {
     { path: "/", changeFrequency: "weekly", priority: 1 },
     { path: "/mariage", changeFrequency: "monthly", priority: 0.9 },
     { path: "/pricing", changeFrequency: "monthly", priority: 0.8 },
-    { path: "/pricing.txt", changeFrequency: "monthly", priority: 0.4 },
     { path: "/about", changeFrequency: "monthly", priority: 0.8 },
     { path: "/contact", changeFrequency: "monthly", priority: 0.7 },
   ] satisfies SitemapEntry[]

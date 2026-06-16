@@ -284,7 +284,7 @@ function DollaHomePage({
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:my-10">
           <div>
             <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
-              Donnez vie à vos rêves
+              Photographe à Paris
             </h1>
           </div>
           {isAdminMode ? (

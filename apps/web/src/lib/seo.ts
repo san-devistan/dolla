@@ -3,6 +3,7 @@ export {
   DEFAULT_DESCRIPTION,
   DEFAULT_IMAGE_URL,
   DEFAULT_TITLE,
+  NOINDEX_ROBOTS,
   SITE_NAME,
   SITE_URL,
 } from "./seo/constants"
@@ -11,9 +12,12 @@ export {
   createCategorySeoHead,
   createContactSeoHead,
   createHomeSeoHead,
+  createNoindexSeoHead,
   createPricingSeoHead,
   createSeoHead,
   createShootSeoHead,
+  getCategorySeoDescription,
+  getCategorySeoTitle,
 } from "./seo/head"
 export {
   createSitemapXml,

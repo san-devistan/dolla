@@ -1,5 +1,6 @@
 import { requireAdminAuth } from "@/lib/admin-route-auth"
 import { ADMIN_HOME_ROUTE, ADMIN_LEGACY_MEDIA_ROUTE } from "@/lib/admin-routes"
+import { createNoindexSeoHead } from "@/lib/seo"
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/admin/media")({
@@ -10,5 +11,6 @@ export const Route = createFileRoute("/admin/media")({
 
     await requireAdminAuth(location)
   },
+  head: () => createNoindexSeoHead("Admin media | Dolla Shashin"),
   component: Outlet,
 })

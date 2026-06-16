@@ -1,3 +1,4 @@
+import { NotFoundPage } from "@/components/not-found-page"
 import {
   deleteCloudinaryFolderFn,
   deleteCloudinaryShootAssetsFn,
@@ -22,8 +23,17 @@ import type {
   CloudinaryShootPage,
 } from "@/lib/cloudinary.server"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
-import { createShootSeoHead } from "@/lib/seo"
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
+import {
+  NOINDEX_ROBOTS,
+  createNoindexSeoHead,
+  createShootSeoHead,
+} from "@/lib/seo"
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  useNavigate,
+} from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import {
   AlertDialog,
@@ -102,17 +112,41 @@ const TABLET_MASONRY_MEDIA_QUERY = "(min-width: 640px)"
 const DESKTOP_MASONRY_MEDIA_QUERY = "(min-width: 1024px)"
 
 export const Route = createFileRoute("/$category/$shoot")({
-  loader: ({ params }) =>
-    getCloudinaryShootFn({
+  loader: async ({ params }) => {
+    const shootPage = await getCloudinaryShootFn({
       data: {
         categoryName: params.category,
         shootName: params.shoot,
       },
-    }),
-  head: ({ loaderData, params }) =>
-    createShootSeoHead(loaderData, params.category, params.shoot),
+    })
+
+    if (!shootPage.category || !shootPage.shoot) {
+      throw notFound({
+        headers: {
+          "X-Robots-Tag": NOINDEX_ROBOTS,
+        },
+      })
+    }
+
+    return shootPage
+  },
+  head: ({ loaderData, match, params }) =>
+    isNotFoundRouteMatch(match)
+      ? createNoindexSeoHead("Page introuvable | Dolla Shashin")
+      : createShootSeoHead(loaderData, params.category, params.shoot),
+  headers: ({ match }) =>
+    isNotFoundRouteMatch(match)
+      ? {
+          "X-Robots-Tag": NOINDEX_ROBOTS,
+        }
+      : undefined,
+  notFoundComponent: NotFoundPage,
   component: PublicShootPage,
 })
+
+function isNotFoundRouteMatch(match: { status?: string }) {
+  return match.status === "notFound"
+}
 
 function useMasonryColumnCount() {
   const [columnCount, setColumnCount] = useState(DEFAULT_MASONRY_COLUMN_COUNT)

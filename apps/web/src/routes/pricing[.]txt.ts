@@ -1,10 +1,11 @@
 import { getCloudinaryPricing } from "@/lib/cloudinary.server"
-import { createPricingMarkdown } from "@/lib/seo"
+import { NOINDEX_ROBOTS, createPricingMarkdown } from "@/lib/seo"
 import { createFileRoute } from "@tanstack/react-router"
 
 const TEXT_HEADERS = {
   "Cache-Control": "public, max-age=3600",
   "Content-Type": "text/plain; charset=utf-8",
+  "X-Robots-Tag": NOINDEX_ROBOTS,
 }
 
 export const Route = createFileRoute("/pricing.txt")({

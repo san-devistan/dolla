@@ -1,7 +1,5 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
 Allow: /
-Disallow: /admin
-Disallow: /admin/
 
-Sitemap: https://dollashashin.com/sitemap.xml
+Sitemap: https://www.dollashashin.com/sitemap.xml

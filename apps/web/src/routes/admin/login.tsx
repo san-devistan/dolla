@@ -3,6 +3,7 @@ import {
   loginAdminFn,
 } from "@/features/admin/admin-auth.functions"
 import { getSafeAdminRedirect } from "@/lib/admin-routes"
+import { createNoindexSeoHead } from "@/lib/seo"
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@workspace/ui/components/button"
@@ -30,13 +31,7 @@ export const Route = createFileRoute("/admin/login")({
 
     return { authState }
   },
-  head: () => ({
-    meta: [
-      {
-        title: "Admin login | Dolla Shashin",
-      },
-    ],
-  }),
+  head: () => createNoindexSeoHead("Admin login | Dolla Shashin"),
   component: AdminLoginPage,
 })
 

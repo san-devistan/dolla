@@ -1,4 +1,4 @@
-const SITE_URL = "https://dollashashin.com"
+const SITE_URL = "https://www.dollashashin.com"
 const SITE_NAME = "Dolla Shashin"
 const PHOTOGRAPHER_NAME = "Dounia Limam"
 const DEFAULT_TITLE = "Dolla Shashin - Photographe Paris"
@@ -7,6 +7,7 @@ const DEFAULT_DESCRIPTION =
 const DEFAULT_IMAGE_URL =
   "https://res.cloudinary.com/dvgc2tpte/image/upload/v1750775265/IMG_9388_rtj8oq.jpg"
 const DEFAULT_ROBOTS = "index, follow, max-image-preview:large, max-snippet:-1"
+const NOINDEX_ROBOTS = "noindex, nofollow, noarchive"
 const SERVICE_AREA = "Paris et Ile-de-France"
 
 type CategorySeoDetails = {
@@ -111,6 +112,7 @@ export {
   DEFAULT_IMAGE_URL,
   DEFAULT_ROBOTS,
   DEFAULT_TITLE,
+  NOINDEX_ROBOTS,
   PHOTOGRAPHER_NAME,
   SERVICE_AREA,
   SITE_NAME,

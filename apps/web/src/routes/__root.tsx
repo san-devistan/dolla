@@ -1,4 +1,5 @@
 import { Footer } from "@/components/footer"
+import { NotFoundPage } from "@/components/not-found-page"
 import { ThemeProvider } from "@/components/theme-provider"
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, SITE_NAME } from "@/lib/seo"
 import type { QueryClient } from "@tanstack/react-query"
@@ -74,12 +75,7 @@ export const Route = createRootRouteWithContext<{
       },
     ],
   }),
-  notFoundComponent: () => (
-    <main className="container mx-auto p-4 pt-16">
-      <h1>404</h1>
-      <p>The requested page could not be found.</p>
-    </main>
-  ),
+  notFoundComponent: NotFoundPage,
   shellComponent: RootDocument,
 })
 

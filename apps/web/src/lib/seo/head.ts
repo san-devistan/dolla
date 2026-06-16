@@ -12,6 +12,7 @@ import {
   DEFAULT_IMAGE_URL,
   DEFAULT_ROBOTS,
   DEFAULT_TITLE,
+  NOINDEX_ROBOTS,
   SITE_NAME,
   type CategorySeoDetails,
 } from "./constants"
@@ -78,6 +79,16 @@ function createSeoHead({
       type: "application/ld+json",
       children: serializeJsonLd(schema),
     })),
+  }
+}
+
+function createNoindexSeoHead(title: string) {
+  return {
+    meta: [
+      { title },
+      { name: "robots", content: NOINDEX_ROBOTS },
+      { name: "googlebot", content: NOINDEX_ROBOTS },
+    ],
   }
 }
 
@@ -270,12 +281,27 @@ function getCategorySeoDetails(slug: string, name: string) {
   )
 }
 
+function getCategorySeoDescription(categoryName: string) {
+  const categorySlug = toMediaRouteSegment(categoryName)
+
+  return getCategorySeoDetails(categorySlug, categoryName).description
+}
+
+function getCategorySeoTitle(categoryName: string) {
+  const categorySlug = toMediaRouteSegment(categoryName)
+
+  return getCategorySeoDetails(categorySlug, categoryName).title
+}
+
 export {
   createAboutSeoHead,
   createCategorySeoHead,
   createContactSeoHead,
   createHomeSeoHead,
+  createNoindexSeoHead,
   createPricingSeoHead,
   createSeoHead,
   createShootSeoHead,
+  getCategorySeoDescription,
+  getCategorySeoTitle,
 }
