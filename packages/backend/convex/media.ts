@@ -10,15 +10,18 @@ import {
 const ROOT_FOLDER = "Dolla"
 const DIRECT_PHOTO_CATEGORY_NAME = "Mariage"
 const DIRECT_PHOTO_CATEGORY_PATH = `${ROOT_FOLDER}/${DIRECT_PHOTO_CATEGORY_NAME}`
+const STABLE_SHOOT_FOLDER_PREFIX = "s_"
 const ORDER_STEP = 1000
 const MAX_CATEGORIES = 100
 const MAX_SHOOTS = 500
 const MAX_ASSETS = 800
 const MAX_HOME_CAROUSEL_ASSETS = 24
+const MAX_CATEGORY_DESCRIPTION_LENGTH = 2000
 const MAX_SHOOT_CREDITS_LENGTH = 2000
 const MAX_SITE_CONTENT_BLOCKS = 40
 const MAX_SITE_CONTENT_TEXT_LENGTH = 12_000
 const MAX_MASONRY_COLUMNS = 4
+const FORBIDDEN_FOLDER_CHARS = /[?&#\\%<>+]/
 
 const nullableString = v.union(v.string(), v.null())
 const nullableNumber = v.union(v.number(), v.null())
@@ -39,19 +42,16 @@ const syncFolderValidator = v.object({
   parentPath: nullableString,
   categoryName: nullableString,
   shootName: nullableString,
-  createdAt: nullableString,
-  updatedAt: nullableString,
-  externalId: nullableString,
 })
 
 const syncAssetValidator = v.object({
   assetId: v.string(),
   publicId: v.string(),
   folder: v.string(),
-  categoryPath: v.string(),
+  categoryPath: nullableString,
   shootPath: v.string(),
-  categoryName: v.string(),
-  shootName: v.string(),
+  categoryName: nullableString,
+  shootName: nullableString,
   displayName: v.string(),
   format: v.string(),
   resourceType: v.string(),
@@ -63,7 +63,6 @@ const syncAssetValidator = v.object({
   thumbnailUrl: v.string(),
   previewUrl: v.string(),
   displayFolder: v.string(),
-  createdAt: nullableString,
   context: v.record(v.string(), v.string()),
 })
 
@@ -101,7 +100,6 @@ const siteAssetValidator = v.object({
   thumbnailUrl: v.string(),
   previewUrl: v.string(),
   displayFolder: v.string(),
-  createdAt: nullableString,
   context: v.record(v.string(), v.string()),
 })
 
@@ -125,11 +123,7 @@ type MediaCategory = SystemFields<"mediaCategories"> & {
   displayPath: string
   orderRank: number
   coverShootPath: string | null
-  cloudinaryExternalId: string | null
-  cloudinaryCreatedAt: string | null
-  cloudinaryUpdatedAt: string | null
-  syncedAt: number
-  deletedAt: number | null
+  description?: string
 }
 type MediaCategoryFolder = Pick<
   MediaCategory,
@@ -138,9 +132,7 @@ type MediaCategoryFolder = Pick<
   | "displayPath"
   | "orderRank"
   | "coverShootPath"
-  | "cloudinaryExternalId"
-  | "cloudinaryCreatedAt"
-  | "cloudinaryUpdatedAt"
+  | "description"
 >
 type MediaShoot = SystemFields<"mediaShoots"> & {
   path: string
@@ -151,11 +143,6 @@ type MediaShoot = SystemFields<"mediaShoots"> & {
   orderRank: number
   coverAssetId: string | null
   credits?: string
-  cloudinaryExternalId: string | null
-  cloudinaryCreatedAt: string | null
-  cloudinaryUpdatedAt: string | null
-  syncedAt: number
-  deletedAt: number | null
 }
 type MediaAsset = SystemFields<"mediaAssets"> & {
   cloudinaryAssetId: string
@@ -176,15 +163,12 @@ type MediaAsset = SystemFields<"mediaAssets"> & {
   thumbnailUrl: string
   previewUrl: string
   displayFolder: string
-  createdAt: string | null
   context: Record<string, string>
   orderRank: number
   layoutColumn?: number
   layoutOrder?: number
   layoutColumnCount?: number
   homeCarouselOrderRank?: number
-  syncedAt: number
-  deletedAt: number | null
 }
 type SiteAsset = SystemFields<"siteAssets"> & {
   key: string
@@ -202,10 +186,7 @@ type SiteAsset = SystemFields<"siteAssets"> & {
   thumbnailUrl: string
   previewUrl: string
   displayFolder: string
-  createdAt: string | null
   context: Record<string, string>
-  updatedAt: number
-  deletedAt: number | null
 }
 
 export const getSiteContent = query({
@@ -222,7 +203,6 @@ export const getSiteContent = query({
     return {
       key: content.key,
       blocks: content.blocks,
-      updatedAt: content.updatedAt,
     }
   },
 })
@@ -235,15 +215,13 @@ export const setSiteContent = mutation({
   handler: async (ctx, args) => {
     const blocks = normalizeSiteContentBlocks(args.blocks)
     const content = await getSiteContentByKey(ctx, args.key)
-    const updatedAt = Date.now()
 
     if (content) {
-      await ctx.db.patch(content._id, { blocks, updatedAt })
+      await ctx.db.patch(content._id, { blocks })
     } else {
       await ctx.db.insert("siteContent", {
         key: normalizeSiteContentKey(args.key),
         blocks,
-        updatedAt,
       })
     }
 
@@ -271,20 +249,15 @@ export const setSiteAsset = mutation({
     const key = normalizeSiteContentKey(args.key)
     const asset = normalizeSiteAsset(args.asset)
     const existing = await getSiteAssetByKey(ctx, key)
-    const updatedAt = Date.now()
 
     if (existing) {
       await ctx.db.patch(existing._id, {
         ...asset,
-        updatedAt,
-        deletedAt: null,
       })
     } else {
       await ctx.db.insert("siteAssets", {
         key,
         ...asset,
-        updatedAt,
-        deletedAt: null,
       })
     }
 
@@ -298,36 +271,34 @@ export const syncSnapshot = mutation({
     assets: v.array(syncAssetValidator),
     markMissingFolders: v.boolean(),
     assetFolderPaths: v.array(v.string()),
-    syncedAt: v.number(),
   },
   handler: async (ctx, args) => {
-    const categoryFolders = args.folders.filter(
-      (folder) => folder.kind === "category"
-    )
     const shootFolders = args.folders.filter(
       (folder) => folder.kind === "shoot"
     )
-    const activeCategoryPaths = new Set(
-      categoryFolders.map((folder) => folder.path)
+    const categoryPathsWithShootFolders = new Set(
+      shootFolders
+        .map((folder) => folder.parentPath)
+        .filter((path): path is string => path !== null)
+    )
+    const categoryFolders = args.folders.filter(
+      (folder) =>
+        folder.kind === "category" &&
+        (categoryPathsWithShootFolders.has(folder.path) ||
+          isDirectPhotoCategoryPath(folder.path))
     )
     const activeShootPaths = new Set(shootFolders.map((folder) => folder.path))
 
-    await upsertCategories(ctx, categoryFolders, args.syncedAt)
-    await upsertShoots(ctx, shootFolders, args.syncedAt)
-    await upsertAssets(ctx, args.assets, args.syncedAt)
+    await upsertCategories(ctx, categoryFolders)
+    await upsertShoots(ctx, shootFolders)
+    await upsertAssets(ctx, args.assets)
 
     if (args.markMissingFolders) {
-      await markMissingCategories(ctx, activeCategoryPaths, args.syncedAt)
-      await markMissingShoots(ctx, activeShootPaths, args.syncedAt)
+      await markMissingShoots(ctx, activeShootPaths)
     }
 
     if (args.assetFolderPaths.length > 0) {
-      await markMissingAssets(
-        ctx,
-        args.assetFolderPaths,
-        args.assets,
-        args.syncedAt
-      )
+      await markMissingAssets(ctx, args.assetFolderPaths, args.assets)
     }
 
     return {
@@ -362,10 +333,17 @@ export const getLibrary = query({
         : args.folderPath
     const selectedShoot = shoots.find((shoot) => shoot.path === selectedFolder)
     const selectedDirectCategory = isDirectPhotoCategoryPath(selectedFolder)
+    const selectedDirectCategoryShoot = selectedDirectCategory
+      ? await getDirectPhotoCategoryShoot(ctx)
+      : null
     const assets = selectedShoot
       ? await listActiveAssetsForShoot(ctx, selectedShoot.path, MAX_ASSETS)
       : selectedDirectCategory
-        ? await listActiveAssetsForShoot(ctx, selectedFolder, MAX_ASSETS)
+        ? await listActiveAssetsForShoot(
+            ctx,
+            selectedDirectCategoryShoot?.path || selectedFolder,
+            MAX_ASSETS
+          )
         : []
 
     return {
@@ -384,11 +362,7 @@ export const getHome = query({
   handler: async (ctx) => {
     const [categories, latestAssets, homeCarouselAssets] = await Promise.all([
       listActiveCategories(ctx),
-      ctx.db
-        .query("mediaAssets")
-        .withIndex("by_deletedAt_and_createdAt", (q) => q.eq("deletedAt", null))
-        .order("desc")
-        .take(42),
+      ctx.db.query("mediaAssets").order("desc").take(42),
       listActiveHomeCarouselAssets(ctx),
     ])
     const categorySummaries = await buildCategorySummaries(ctx, categories)
@@ -413,13 +387,22 @@ export const getCategory = query({
     const storedCategory = await getActiveCategoryByPath(ctx, args.categoryPath)
     const category =
       storedCategory || getVirtualDirectPhotoCategory(args.categoryPath)
+    const isDirectCategory =
+      category !== null && isDirectPhotoCategoryPath(category.path)
+    const directCategoryShoot = isDirectCategory
+      ? await getDirectPhotoCategoryShoot(ctx)
+      : null
     const shoots =
-      category && !isDirectPhotoCategoryPath(category.path)
+      category && !isDirectCategory
         ? await listActiveShootsForCategory(ctx, category.path)
         : []
     const assets =
-      category && isDirectPhotoCategoryPath(category.path)
-        ? await listActiveAssetsForShoot(ctx, category.path, MAX_ASSETS)
+      category && isDirectCategory
+        ? await listActiveAssetsForShoot(
+            ctx,
+            directCategoryShoot?.path || category.path,
+            MAX_ASSETS
+          )
         : []
     const shootSummaries = []
 
@@ -429,7 +412,13 @@ export const getCategory = query({
 
     return {
       rootFolder: ROOT_FOLDER,
-      category: category ? categoryFolderView(category) : null,
+      category: category
+        ? categoryFolderView({
+            ...category,
+            coverShootPath:
+              directCategoryShoot?.path || category.coverShootPath,
+          })
+        : null,
       categories: await buildCategorySummaries(ctx, categories),
       shoots: shootSummaries,
       assets: assets.map(assetView),
@@ -497,9 +486,15 @@ export const reorderAssets = mutation({
     assetLayouts: v.optional(v.array(reorderAssetLayoutValidator)),
   },
   handler: async (ctx, args) => {
-    const shoot = await getActiveShootByPath(ctx, args.shootPath)
+    const shootPath = normalizeDollaPath(args.shootPath)
+    const shoot = await getActiveShootByPath(ctx, shootPath)
+    const resolvedShootPath =
+      shoot?.path ||
+      (isDirectPhotoCategoryPath(shootPath)
+        ? (await getDirectPhotoCategoryShoot(ctx))?.path || shootPath
+        : null)
 
-    if (!shoot && !isDirectPhotoCategoryPath(args.shootPath)) {
+    if (!resolvedShootPath) {
       throw new Error("Shoot not found.")
     }
 
@@ -508,7 +503,193 @@ export const reorderAssets = mutation({
       args.assetLayouts
     )
 
-    await patchOrderedAssets(ctx, shoot?.path || args.shootPath, orderedAssets)
+    await patchOrderedAssets(ctx, resolvedShootPath, orderedAssets)
+
+    return null
+  },
+})
+
+export const createCategory = mutation({
+  args: {
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const name = normalizeMediaName(args.name)
+    const categoryPath = buildCategoryPath(name)
+    const existing = await getCategoryByPath(ctx, categoryPath)
+
+    if (existing) {
+      throw new Error("Category already exists.")
+    }
+
+    await ctx.db.insert("mediaCategories", {
+      path: categoryPath,
+      name,
+      displayPath: name,
+      orderRank: await getNextCategoryRank(ctx),
+      coverShootPath: null,
+    })
+
+    return null
+  },
+})
+
+export const createShoot = mutation({
+  args: {
+    categoryPath: v.string(),
+    shootPath: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const category = await getActiveCategoryByPath(ctx, args.categoryPath)
+
+    if (!category) {
+      throw new Error("Category not found.")
+    }
+
+    const name = normalizeMediaName(args.name)
+    const shootPath = normalizeDollaPath(args.shootPath)
+    const isDirectCategory = isDirectPhotoCategoryPath(category.path)
+
+    if (!isStableShootPath(shootPath)) {
+      throw new Error("Shoot folder path must use a stable shoot key.")
+    }
+
+    const existingCategoryAtPath = await getCategoryByPath(ctx, shootPath)
+    const existingAtPath = await getShootByPath(ctx, shootPath)
+    const existingInCategory = await getActiveShootByNameInCategory(
+      ctx,
+      category.path,
+      name
+    )
+
+    if (isDirectCategory) {
+      const directCategoryShoot = await getDirectPhotoCategoryShoot(ctx)
+
+      if (!namesMatch(name, DIRECT_PHOTO_CATEGORY_NAME)) {
+        throw new Error("Mariage can only contain the Mariage shoot.")
+      }
+
+      if (directCategoryShoot && directCategoryShoot.path !== shootPath) {
+        throw new Error("Mariage can only contain one shoot.")
+      }
+    }
+
+    if (existingInCategory) {
+      throw new Error("Shoot already exists in this category.")
+    }
+
+    if (existingCategoryAtPath) {
+      throw new Error("Shoot folder path conflicts with a category.")
+    }
+
+    if (existingAtPath) {
+      throw new Error("Shoot folder path already belongs to an active shoot.")
+    }
+
+    await ctx.db.insert("mediaShoots", {
+      path: shootPath,
+      categoryPath: category.path,
+      categoryName: category.name,
+      name,
+      displayPath: buildShootDisplayPath(category.name, name),
+      orderRank: await getNextShootRank(ctx, new Map(), category.path),
+      coverAssetId: null,
+      credits: "",
+    })
+
+    if (isDirectCategory) {
+      await ctx.db.patch(category._id, {
+        coverShootPath: shootPath,
+      })
+    }
+
+    return null
+  },
+})
+
+export const renameFolder = mutation({
+  args: {
+    folderPath: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const folderPath = normalizeDollaPath(args.folderPath)
+    const name = normalizeMediaName(args.name)
+    const category = await getActiveCategoryByPath(ctx, folderPath)
+
+    if (category) {
+      await renameCategoryInConvex(ctx, category, name)
+
+      return null
+    }
+
+    const shoot = await getActiveShootByPath(ctx, folderPath)
+
+    if (!shoot) {
+      throw new Error("Folder not found.")
+    }
+
+    await renameShootInConvex(ctx, shoot, name)
+
+    return null
+  },
+})
+
+export const deleteFolder = mutation({
+  args: {
+    folderPath: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const folderPath = normalizeDollaPath(args.folderPath)
+    const category = await getActiveCategoryByPath(ctx, folderPath)
+
+    if (category) {
+      await deleteCategoryInConvex(ctx, category)
+
+      return null
+    }
+
+    const shoot = await getActiveShootByPath(ctx, folderPath)
+
+    if (!shoot) {
+      throw new Error("Folder not found.")
+    }
+
+    await deleteShootInConvex(ctx, shoot)
+
+    return null
+  },
+})
+
+export const moveShoots = mutation({
+  args: {
+    shootPaths: v.array(v.string()),
+    targetCategoryPath: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const targetCategory = await getActiveCategoryByPath(
+      ctx,
+      args.targetCategoryPath
+    )
+
+    if (!targetCategory) {
+      throw new Error("Target category not found.")
+    }
+
+    if (isDirectPhotoCategoryPath(targetCategory.path)) {
+      throw new Error(
+        "Mariage displays its single shoot directly and cannot accept moved shoots."
+      )
+    }
+
+    const uniqueShootPaths = getUniqueDollaPaths(args.shootPaths)
+
+    if (uniqueShootPaths.length === 0) {
+      throw new Error("Select at least one shoot to move.")
+    }
+
+    await moveShootsInConvex(ctx, uniqueShootPaths, targetCategory)
 
     return null
   },
@@ -622,6 +803,26 @@ export const setShootCredits = mutation({
   },
 })
 
+export const setCategoryDescription = mutation({
+  args: {
+    categoryPath: v.string(),
+    description: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const category = await getActiveCategoryByPath(ctx, args.categoryPath)
+
+    if (!category) {
+      throw new Error("Category not found.")
+    }
+
+    await ctx.db.patch(category._id, {
+      description: normalizeCategoryDescription(args.description),
+    })
+
+    return null
+  },
+})
+
 export const setCategoryCoverShoot = mutation({
   args: {
     categoryPath: v.string(),
@@ -648,11 +849,9 @@ export const setCategoryCoverShoot = mutation({
   },
 })
 
-async function upsertCategories(
-  ctx: MutationCtx,
-  folders: SyncFolder[],
-  syncedAt: number
-) {
+async function upsertCategories(ctx: MutationCtx, folders: SyncFolder[]) {
+  const shouldBootstrapCategories =
+    (await listActiveCategories(ctx)).length === 0
   let nextRank = await getNextCategoryRank(ctx)
 
   for (const folder of folders) {
@@ -662,12 +861,11 @@ async function upsertCategories(
       await ctx.db.patch(existing._id, {
         name: folder.name,
         displayPath: folder.displayPath,
-        cloudinaryExternalId: folder.externalId,
-        cloudinaryCreatedAt: folder.createdAt,
-        cloudinaryUpdatedAt: folder.updatedAt,
-        syncedAt,
-        deletedAt: null,
       })
+      continue
+    }
+
+    if (!shouldBootstrapCategories) {
       continue
     }
 
@@ -677,21 +875,13 @@ async function upsertCategories(
       displayPath: folder.displayPath,
       orderRank: nextRank,
       coverShootPath: null,
-      cloudinaryExternalId: folder.externalId,
-      cloudinaryCreatedAt: folder.createdAt,
-      cloudinaryUpdatedAt: folder.updatedAt,
-      syncedAt,
-      deletedAt: null,
     })
     nextRank += ORDER_STEP
   }
 }
 
-async function upsertShoots(
-  ctx: MutationCtx,
-  folders: SyncFolder[],
-  syncedAt: number
-) {
+async function upsertShoots(ctx: MutationCtx, folders: SyncFolder[]) {
+  const shouldBootstrapShoots = (await listActiveShoots(ctx)).length === 0
   const nextRankByCategoryPath = new Map<string, number>()
 
   for (const folder of folders) {
@@ -706,17 +896,10 @@ async function upsertShoots(
     const existing = await getShootByPath(ctx, folder.path)
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
-        categoryPath: folder.parentPath,
-        categoryName: folder.categoryName,
-        name: folder.name,
-        displayPath: folder.displayPath,
-        cloudinaryExternalId: folder.externalId,
-        cloudinaryCreatedAt: folder.createdAt,
-        cloudinaryUpdatedAt: folder.updatedAt,
-        syncedAt,
-        deletedAt: null,
-      })
+      continue
+    }
+
+    if (!shouldBootstrapShoots) {
       continue
     }
 
@@ -735,33 +918,34 @@ async function upsertShoots(
       orderRank,
       coverAssetId: null,
       credits: "",
-      cloudinaryExternalId: folder.externalId,
-      cloudinaryCreatedAt: folder.createdAt,
-      cloudinaryUpdatedAt: folder.updatedAt,
-      syncedAt,
-      deletedAt: null,
     })
   }
 }
 
-async function upsertAssets(
-  ctx: MutationCtx,
-  assets: SyncAsset[],
-  syncedAt: number
-) {
+async function upsertAssets(ctx: MutationCtx, assets: SyncAsset[]) {
   const nextRankByShootPath = new Map<string, number>()
 
   for (const asset of assets) {
     const existing = await getAssetByCloudinaryAssetId(ctx, asset.assetId)
+    const shoot = await getShootByPath(ctx, asset.shootPath)
+
+    const categoryPath = shoot?.categoryPath ?? asset.categoryPath
+    const categoryName = shoot?.categoryName ?? asset.categoryName
+    const shootName = shoot?.name ?? asset.shootName
+    const displayFolder = shoot?.name ?? asset.displayFolder
+
+    if (!categoryPath || !categoryName || !shootName) {
+      continue
+    }
 
     if (existing) {
       await ctx.db.patch(existing._id, {
         publicId: asset.publicId,
         assetFolder: asset.folder,
-        categoryPath: asset.categoryPath,
+        categoryPath,
         shootPath: asset.shootPath,
-        categoryName: asset.categoryName,
-        shootName: asset.shootName,
+        categoryName,
+        shootName,
         displayName: asset.displayName,
         format: asset.format,
         resourceType: asset.resourceType,
@@ -772,11 +956,8 @@ async function upsertAssets(
         secureUrl: asset.secureUrl,
         thumbnailUrl: asset.thumbnailUrl,
         previewUrl: asset.previewUrl,
-        displayFolder: asset.displayFolder,
-        createdAt: asset.createdAt,
+        displayFolder,
         context: asset.context,
-        syncedAt,
-        deletedAt: null,
       })
       continue
     }
@@ -791,10 +972,10 @@ async function upsertAssets(
       cloudinaryAssetId: asset.assetId,
       publicId: asset.publicId,
       assetFolder: asset.folder,
-      categoryPath: asset.categoryPath,
+      categoryPath,
       shootPath: asset.shootPath,
-      categoryName: asset.categoryName,
-      shootName: asset.shootName,
+      categoryName,
+      shootName,
       displayName: asset.displayName,
       format: asset.format,
       resourceType: asset.resourceType,
@@ -805,40 +986,25 @@ async function upsertAssets(
       secureUrl: asset.secureUrl,
       thumbnailUrl: asset.thumbnailUrl,
       previewUrl: asset.previewUrl,
-      displayFolder: asset.displayFolder,
-      createdAt: asset.createdAt,
+      displayFolder,
       context: asset.context,
       orderRank,
-      syncedAt,
-      deletedAt: null,
     })
-  }
-}
-
-async function markMissingCategories(
-  ctx: MutationCtx,
-  activeCategoryPaths: Set<string>,
-  syncedAt: number
-) {
-  const categories = await listActiveCategories(ctx)
-
-  for (const category of categories) {
-    if (!activeCategoryPaths.has(category.path)) {
-      await ctx.db.patch(category._id, { syncedAt, deletedAt: syncedAt })
-    }
   }
 }
 
 async function markMissingShoots(
   ctx: MutationCtx,
-  activeShootPaths: Set<string>,
-  syncedAt: number
+  activeShootPaths: Set<string>
 ) {
   const shoots = await listActiveShoots(ctx)
 
   for (const shoot of shoots) {
-    if (!activeShootPaths.has(shoot.path)) {
-      await ctx.db.patch(shoot._id, { syncedAt, deletedAt: syncedAt })
+    if (
+      !activeShootPaths.has(shoot.path) &&
+      !isDirectPhotoCategoryPath(shoot.categoryPath)
+    ) {
+      await deleteShootInConvex(ctx, shoot)
     }
   }
 }
@@ -846,8 +1012,7 @@ async function markMissingShoots(
 async function markMissingAssets(
   ctx: MutationCtx,
   assetFolderPaths: string[],
-  assets: SyncAsset[],
-  syncedAt: number
+  assets: SyncAsset[]
 ) {
   const activeAssetIdsByFolder = new Map<string, Set<string>>()
 
@@ -862,14 +1027,14 @@ async function markMissingAssets(
   for (const [folderPath, activeAssetIds] of activeAssetIdsByFolder) {
     const storedAssets = await ctx.db
       .query("mediaAssets")
-      .withIndex("by_assetFolder_and_deletedAt_and_orderRank", (q) =>
-        q.eq("assetFolder", folderPath).eq("deletedAt", null)
+      .withIndex("by_assetFolder_and_orderRank", (q) =>
+        q.eq("assetFolder", folderPath)
       )
       .take(MAX_ASSETS)
 
     for (const asset of storedAssets) {
       if (!activeAssetIds.has(asset.cloudinaryAssetId)) {
-        await ctx.db.patch(asset._id, { syncedAt, deletedAt: syncedAt })
+        await ctx.db.delete(asset._id)
       }
     }
   }
@@ -1055,7 +1220,7 @@ async function patchOrderedAssets(
 async function getNextCategoryRank(ctx: MutationCtx) {
   const categories = await ctx.db
     .query("mediaCategories")
-    .withIndex("by_deletedAt_and_orderRank", (q) => q.eq("deletedAt", null))
+    .withIndex("by_orderRank")
     .order("desc")
     .take(1)
 
@@ -1076,8 +1241,8 @@ async function getNextShootRank(
 
   const shoots = await ctx.db
     .query("mediaShoots")
-    .withIndex("by_categoryPath_and_deletedAt_and_orderRank", (q) =>
-      q.eq("categoryPath", categoryPath).eq("deletedAt", null)
+    .withIndex("by_categoryPath_and_orderRank", (q) =>
+      q.eq("categoryPath", categoryPath)
     )
     .order("desc")
     .take(1)
@@ -1102,8 +1267,8 @@ async function getNextAssetRank(
 
   const assets = await ctx.db
     .query("mediaAssets")
-    .withIndex("by_shootPath_and_deletedAt_and_orderRank", (q) =>
-      q.eq("shootPath", shootPath).eq("deletedAt", null)
+    .withIndex("by_shootPath_and_orderRank", (q) =>
+      q.eq("shootPath", shootPath)
     )
     .order("desc")
     .take(1)
@@ -1112,6 +1277,280 @@ async function getNextAssetRank(
   nextRankByShootPath.set(shootPath, nextRank + ORDER_STEP)
 
   return nextRank
+}
+
+function normalizeMediaName(value: string) {
+  const name = value.trim()
+
+  if (!name) {
+    throw new Error("Name cannot be empty.")
+  }
+
+  if (name.includes("/")) {
+    throw new Error("Names cannot contain slashes.")
+  }
+
+  if (FORBIDDEN_FOLDER_CHARS.test(name)) {
+    throw new Error("Names cannot contain ? & # \\ % < > or +.")
+  }
+
+  return name
+}
+
+function normalizeDollaPath(value: string) {
+  const path = value
+    .trim()
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/\/+/g, "/")
+
+  if (!path) {
+    throw new Error("Path cannot be empty.")
+  }
+
+  if (path !== ROOT_FOLDER && !path.startsWith(`${ROOT_FOLDER}/`)) {
+    throw new Error(`Path must be inside ${ROOT_FOLDER}/.`)
+  }
+
+  for (const segment of path.split("/")) {
+    normalizeMediaName(segment)
+  }
+
+  return path
+}
+
+function getDollaPathDepth(path: string) {
+  return Math.max(0, normalizeDollaPath(path).split("/").length - 1)
+}
+
+function getDollaPathLeaf(path: string) {
+  return normalizeDollaPath(path).split("/").at(-1) || ""
+}
+
+function getUniqueDollaPaths(paths: string[]) {
+  return Array.from(new Set(paths.map(normalizeDollaPath)))
+}
+
+function isStableShootPath(path: string) {
+  return (
+    getDollaPathDepth(path) === 1 &&
+    getDollaPathLeaf(path).startsWith(STABLE_SHOOT_FOLDER_PREFIX)
+  )
+}
+
+function buildCategoryPath(name: string) {
+  return `${ROOT_FOLDER}/${normalizeMediaName(name)}`
+}
+
+function buildShootDisplayPath(categoryName: string, shootName: string) {
+  return `${categoryName} / ${shootName}`
+}
+
+function namesMatch(first: string, second: string) {
+  return first.localeCompare(second, undefined, { sensitivity: "base" }) === 0
+}
+
+async function getActiveShootByNameInCategory(
+  ctx: QueryCtx | MutationCtx,
+  categoryPath: string,
+  name: string
+) {
+  const shoots = await listActiveShootsForCategory(ctx, categoryPath)
+
+  return shoots.find((shoot) => namesMatch(shoot.name, name)) || null
+}
+
+async function renameCategoryInConvex(
+  ctx: MutationCtx,
+  category: MediaCategory,
+  name: string
+) {
+  const categoryPath = buildCategoryPath(name)
+  const existing = await getCategoryByPath(ctx, categoryPath)
+
+  if (existing && existing._id !== category._id) {
+    throw new Error("Category already exists.")
+  }
+
+  const shoots = await listActiveShootsForCategory(ctx, category.path)
+  const assets = await listActiveAssetsForCategory(
+    ctx,
+    category.path,
+    MAX_ASSETS
+  )
+
+  await ctx.db.patch(category._id, {
+    path: categoryPath,
+    name,
+    displayPath: name,
+  })
+
+  for (const shoot of shoots) {
+    await ctx.db.patch(shoot._id, {
+      categoryPath,
+      categoryName: name,
+      displayPath: buildShootDisplayPath(name, shoot.name),
+    })
+  }
+
+  for (const asset of assets) {
+    await ctx.db.patch(asset._id, {
+      categoryPath,
+      categoryName: name,
+    })
+  }
+}
+
+async function renameShootInConvex(
+  ctx: MutationCtx,
+  shoot: MediaShoot,
+  name: string
+) {
+  const category = await getActiveCategoryByPath(ctx, shoot.categoryPath)
+
+  if (!category) {
+    throw new Error("Category not found.")
+  }
+
+  const existing = await getActiveShootByNameInCategory(
+    ctx,
+    category.path,
+    name
+  )
+
+  if (existing && existing._id !== shoot._id) {
+    throw new Error("Shoot already exists in this category.")
+  }
+
+  const assets = await listActiveAssetsForShoot(ctx, shoot.path, MAX_ASSETS)
+
+  await ctx.db.patch(shoot._id, {
+    name,
+    displayPath: buildShootDisplayPath(category.name, name),
+  })
+
+  for (const asset of assets) {
+    await ctx.db.patch(asset._id, {
+      shootName: name,
+    })
+  }
+}
+
+async function deleteCategoryInConvex(
+  ctx: MutationCtx,
+  category: MediaCategory
+) {
+  if (isDirectPhotoCategoryPath(category.path)) {
+    throw new Error("Mariage cannot be deleted.")
+  }
+
+  const shoots = await listActiveShootsForCategory(ctx, category.path)
+
+  for (const shoot of shoots) {
+    await deleteShootInConvex(ctx, shoot)
+  }
+
+  await ctx.db.delete(category._id)
+}
+
+async function deleteShootInConvex(ctx: MutationCtx, shoot: MediaShoot) {
+  if (isDirectPhotoCategoryPath(shoot.categoryPath)) {
+    throw new Error("Mariage shoot cannot be deleted.")
+  }
+
+  const assets = await listActiveAssetsForShoot(ctx, shoot.path, MAX_ASSETS)
+  const category = await getCategoryByPath(ctx, shoot.categoryPath)
+
+  for (const asset of assets) {
+    await ctx.db.delete(asset._id)
+  }
+
+  if (category?.coverShootPath === shoot.path) {
+    await ctx.db.patch(category._id, { coverShootPath: null })
+  }
+
+  await ctx.db.delete(shoot._id)
+}
+
+async function moveShootsInConvex(
+  ctx: MutationCtx,
+  shootPaths: string[],
+  targetCategory: MediaCategory
+) {
+  const selectedShootPathSet = new Set(shootPaths)
+  const targetShoots = await listActiveShootsForCategory(
+    ctx,
+    targetCategory.path
+  )
+  const targetShootsByName = new Map(
+    targetShoots.map((shoot) => [shoot.name.toLowerCase(), shoot])
+  )
+  const selectedNames = new Set<string>()
+  const nextRankByCategoryPath = new Map<string, number>()
+
+  for (const shootPath of shootPaths) {
+    const shoot = await getActiveShootByPath(ctx, shootPath)
+
+    if (!shoot) {
+      throw new Error("Selected shoots must be active shoots.")
+    }
+
+    if (isDirectPhotoCategoryPath(shoot.categoryPath)) {
+      throw new Error("Mariage shoot cannot be moved.")
+    }
+
+    if (shoot.categoryPath === targetCategory.path) {
+      throw new Error("Choose a different category for the selected shoots.")
+    }
+
+    const shootNameKey = shoot.name.toLowerCase()
+
+    if (selectedNames.has(shootNameKey)) {
+      throw new Error("Selected shoots must have unique names.")
+    }
+
+    selectedNames.add(shootNameKey)
+
+    const conflictingShoot = targetShootsByName.get(shootNameKey)
+
+    if (conflictingShoot && !selectedShootPathSet.has(conflictingShoot.path)) {
+      throw new Error(
+        `"${shoot.name}" already exists in ${targetCategory.name}.`
+      )
+    }
+  }
+
+  for (const shootPath of shootPaths) {
+    const shoot = await getActiveShootByPath(ctx, shootPath)
+
+    if (!shoot) {
+      continue
+    }
+
+    const sourceCategory = await getCategoryByPath(ctx, shoot.categoryPath)
+    const assets = await listActiveAssetsForShoot(ctx, shoot.path, MAX_ASSETS)
+
+    await ctx.db.patch(shoot._id, {
+      categoryPath: targetCategory.path,
+      categoryName: targetCategory.name,
+      displayPath: buildShootDisplayPath(targetCategory.name, shoot.name),
+      orderRank: await getNextShootRank(
+        ctx,
+        nextRankByCategoryPath,
+        targetCategory.path
+      ),
+    })
+
+    for (const asset of assets) {
+      await ctx.db.patch(asset._id, {
+        categoryPath: targetCategory.path,
+        categoryName: targetCategory.name,
+      })
+    }
+
+    if (sourceCategory?.coverShootPath === shoot.path) {
+      await ctx.db.patch(sourceCategory._id, { coverShootPath: null })
+    }
+  }
 }
 
 function isDirectPhotoCategoryPath(path: string) {
@@ -1137,9 +1576,6 @@ function getVirtualDirectPhotoCategory(
     displayPath: DIRECT_PHOTO_CATEGORY_NAME,
     orderRank: ORDER_STEP,
     coverShootPath: null,
-    cloudinaryExternalId: null,
-    cloudinaryCreatedAt: null,
-    cloudinaryUpdatedAt: null,
   }
 }
 
@@ -1152,14 +1588,21 @@ async function buildCategorySummaries(
 
   for (const category of categories) {
     const isDirectCategory = isDirectPhotoCategoryPath(category.path)
-    const categoryShoots = isDirectCategory
-      ? []
-      : shoots.filter((shoot) => shoot.categoryPath === category.path)
+    const categoryShoots = shoots.filter(
+      (shoot) => shoot.categoryPath === category.path
+    )
+    const directCategoryShoot = isDirectCategory
+      ? categoryShoots[0] || null
+      : null
     const directCategoryAssets = isDirectCategory
-      ? await listActiveAssetsForShoot(ctx, category.path, MAX_ASSETS)
+      ? await listActiveAssetsForShoot(
+          ctx,
+          directCategoryShoot?.path || category.path,
+          MAX_ASSETS
+        )
       : []
     const selectedShoot = isDirectCategory
-      ? null
+      ? directCategoryShoot
       : categoryShoots.find(
           (shoot) => shoot.path === category.coverShootPath
         ) ||
@@ -1205,6 +1648,15 @@ async function buildCategorySummaries(
   return summaries
 }
 
+async function getDirectPhotoCategoryShoot(ctx: QueryCtx | MutationCtx) {
+  const directCategoryShoots = await listActiveShootsForCategory(
+    ctx,
+    DIRECT_PHOTO_CATEGORY_PATH
+  )
+
+  return directCategoryShoots[0] || null
+}
+
 async function shootSummaryView(ctx: QueryCtx, shoot: MediaShoot) {
   const [coverAsset, assets] = await Promise.all([
     getShootCoverAsset(ctx, shoot),
@@ -1240,7 +1692,7 @@ async function getShootCoverAsset(ctx: QueryCtx, shoot: MediaShoot) {
 async function listActiveCategories(ctx: QueryCtx | MutationCtx) {
   return await ctx.db
     .query("mediaCategories")
-    .withIndex("by_deletedAt_and_orderRank", (q) => q.eq("deletedAt", null))
+    .withIndex("by_orderRank")
     .order("asc")
     .take(MAX_CATEGORIES)
 }
@@ -1248,7 +1700,7 @@ async function listActiveCategories(ctx: QueryCtx | MutationCtx) {
 async function listActiveShoots(ctx: QueryCtx | MutationCtx) {
   return await ctx.db
     .query("mediaShoots")
-    .withIndex("by_deletedAt_and_orderRank", (q) => q.eq("deletedAt", null))
+    .withIndex("by_orderRank")
     .order("asc")
     .take(MAX_SHOOTS)
 }
@@ -1259,8 +1711,8 @@ async function listActiveShootsForCategory(
 ) {
   return await ctx.db
     .query("mediaShoots")
-    .withIndex("by_categoryPath_and_deletedAt_and_orderRank", (q) =>
-      q.eq("categoryPath", categoryPath).eq("deletedAt", null)
+    .withIndex("by_categoryPath_and_orderRank", (q) =>
+      q.eq("categoryPath", categoryPath)
     )
     .order("asc")
     .take(MAX_SHOOTS)
@@ -1273,8 +1725,22 @@ async function listActiveAssetsForShoot(
 ) {
   return await ctx.db
     .query("mediaAssets")
-    .withIndex("by_shootPath_and_deletedAt_and_orderRank", (q) =>
-      q.eq("shootPath", shootPath).eq("deletedAt", null)
+    .withIndex("by_shootPath_and_orderRank", (q) =>
+      q.eq("shootPath", shootPath)
+    )
+    .order("asc")
+    .take(limit)
+}
+
+async function listActiveAssetsForCategory(
+  ctx: QueryCtx | MutationCtx,
+  categoryPath: string,
+  limit: number
+) {
+  return await ctx.db
+    .query("mediaAssets")
+    .withIndex("by_categoryPath_and_orderRank", (q) =>
+      q.eq("categoryPath", categoryPath)
     )
     .order("asc")
     .take(limit)
@@ -1283,8 +1749,8 @@ async function listActiveAssetsForShoot(
 async function listActiveHomeCarouselAssets(ctx: QueryCtx | MutationCtx) {
   return await ctx.db
     .query("mediaAssets")
-    .withIndex("by_deletedAt_and_homeCarouselOrderRank", (q) =>
-      q.eq("deletedAt", null).gt("homeCarouselOrderRank", 0)
+    .withIndex("by_homeCarouselOrderRank", (q) =>
+      q.gt("homeCarouselOrderRank", 0)
     )
     .order("asc")
     .take(MAX_HOME_CAROUSEL_ASSETS)
@@ -1293,8 +1759,8 @@ async function listActiveHomeCarouselAssets(ctx: QueryCtx | MutationCtx) {
 async function getNextHomeCarouselAssetRank(ctx: MutationCtx) {
   const assets = await ctx.db
     .query("mediaAssets")
-    .withIndex("by_deletedAt_and_homeCarouselOrderRank", (q) =>
-      q.eq("deletedAt", null).gt("homeCarouselOrderRank", 0)
+    .withIndex("by_homeCarouselOrderRank", (q) =>
+      q.gt("homeCarouselOrderRank", 0)
     )
     .order("desc")
     .take(1)
@@ -1318,7 +1784,7 @@ async function getActiveCategoryByPath(
     .withIndex("by_path", (q) => q.eq("path", path))
     .unique()
 
-  return category && category.deletedAt === null ? category : null
+  return category
 }
 
 async function getShootByPath(ctx: MutationCtx, path: string) {
@@ -1334,7 +1800,7 @@ async function getActiveShootByPath(ctx: QueryCtx | MutationCtx, path: string) {
     .withIndex("by_path", (q) => q.eq("path", path))
     .unique()
 
-  return shoot && shoot.deletedAt === null ? shoot : null
+  return shoot
 }
 
 async function getAssetByCloudinaryAssetId(ctx: MutationCtx, assetId: string) {
@@ -1357,7 +1823,7 @@ async function getActiveAssetByCloudinaryAssetId(
     )
     .unique()
 
-  return asset && asset.deletedAt === null ? asset : null
+  return asset
 }
 
 function rootFolderView() {
@@ -1370,12 +1836,10 @@ function rootFolderView() {
     parentPath: null,
     categoryName: null,
     shootName: null,
-    createdAt: null,
-    updatedAt: null,
-    externalId: null,
     orderRank: 0,
     coverShootPath: null,
     coverAssetId: null,
+    description: null,
     credits: null,
   }
 }
@@ -1390,12 +1854,10 @@ function categoryFolderView(category: MediaCategoryFolder) {
     parentPath: ROOT_FOLDER,
     categoryName: category.name,
     shootName: null,
-    createdAt: category.cloudinaryCreatedAt,
-    updatedAt: category.cloudinaryUpdatedAt,
-    externalId: category.cloudinaryExternalId,
     orderRank: category.orderRank,
     coverShootPath: category.coverShootPath,
     coverAssetId: null,
+    description: category.description ?? null,
     credits: null,
   }
 }
@@ -1410,12 +1872,10 @@ function shootFolderView(shoot: MediaShoot) {
     parentPath: shoot.categoryPath,
     categoryName: shoot.categoryName,
     shootName: shoot.name,
-    createdAt: shoot.cloudinaryCreatedAt,
-    updatedAt: shoot.cloudinaryUpdatedAt,
-    externalId: shoot.cloudinaryExternalId,
     orderRank: shoot.orderRank,
     coverShootPath: null,
     coverAssetId: shoot.coverAssetId,
+    description: null,
     credits: shoot.credits || null,
   }
 }
@@ -1438,7 +1898,6 @@ function assetView(asset: MediaAsset) {
     displayFolder: asset.displayFolder,
     categoryName: asset.categoryName,
     shootName: asset.shootName,
-    createdAt: asset.createdAt,
     context: asset.context,
     orderRank: asset.orderRank,
     layoutColumn: asset.layoutColumn ?? null,
@@ -1465,9 +1924,7 @@ function siteAssetView(asset: SiteAsset) {
     thumbnailUrl: asset.thumbnailUrl,
     previewUrl: asset.previewUrl,
     displayFolder: asset.displayFolder,
-    createdAt: asset.createdAt,
     context: asset.context,
-    updatedAt: asset.updatedAt,
   }
 }
 
@@ -1501,7 +1958,7 @@ async function getActiveSiteAssetByKey(
 ) {
   const asset = await getSiteAssetByKey(ctx, key)
 
-  return asset && asset.deletedAt === null ? asset : null
+  return asset
 }
 
 function normalizeSiteAsset(asset: SiteAssetInput) {
@@ -1524,7 +1981,6 @@ function normalizeSiteAsset(asset: SiteAssetInput) {
     thumbnailUrl: asset.thumbnailUrl,
     previewUrl: asset.previewUrl,
     displayFolder: asset.displayFolder,
-    createdAt: asset.createdAt,
     context: asset.context,
   }
 }
@@ -1577,4 +2033,16 @@ function normalizeShootCredits(credits: string) {
   }
 
   return normalizedCredits
+}
+
+function normalizeCategoryDescription(description: string) {
+  const normalizedDescription = description.trim().replace(/\s+/g, " ")
+
+  if (normalizedDescription.length > MAX_CATEGORY_DESCRIPTION_LENGTH) {
+    throw new Error(
+      `Description must be ${MAX_CATEGORY_DESCRIPTION_LENGTH} characters or less.`
+    )
+  }
+
+  return normalizedDescription
 }

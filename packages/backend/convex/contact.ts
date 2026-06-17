@@ -35,7 +35,6 @@ type ContactSettings = {
   notificationFrom: string
   notificationRecipients: string[]
   notificationSubject: string
-  updatedAt: number | null
 }
 
 type ContactMessage = {
@@ -71,7 +70,7 @@ const DEFAULT_CONTACT_CONTENT = {
   formTitle: "CONTACTEZ-MOI",
   notificationFrom: "Contact Form <contact@dollashashin.com>",
   notificationSubject: "Nouveau message sur dollashashin.com",
-} satisfies Omit<ContactSettings, "notificationRecipients" | "updatedAt">
+} satisfies Omit<ContactSettings, "notificationRecipients">
 
 const DEFAULT_NOTIFICATION_RECIPIENTS = [
   "lcombaret1@gmail.com",
@@ -82,7 +81,6 @@ const DEFAULT_NOTIFICATION_RECIPIENTS = [
 const DEFAULT_CONTACT_SETTINGS = {
   ...DEFAULT_CONTACT_CONTENT,
   notificationRecipients: [...DEFAULT_NOTIFICATION_RECIPIENTS],
-  updatedAt: null,
 } satisfies ContactSettings
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -101,25 +99,21 @@ export const setContactSettings = mutation({
       args.notificationRecipients
     )
     const existing = await getContactSettingsDoc(ctx)
-    const updatedAt = Date.now()
 
     if (existing) {
       await ctx.db.patch(existing["_id"], {
         notificationRecipients,
-        updatedAt,
       })
     } else {
       await ctx.db.insert("contactSettings", {
         key: CONTACT_SETTINGS_KEY,
         notificationRecipients,
-        updatedAt,
       })
     }
 
     return {
       ...DEFAULT_CONTACT_CONTENT,
       notificationRecipients,
-      updatedAt,
     }
   },
 })
@@ -165,7 +159,6 @@ async function getStoredContactSettings(
       ...link,
     })),
     notificationRecipients: settings.notificationRecipients,
-    updatedAt: settings.updatedAt,
   }
 }
 

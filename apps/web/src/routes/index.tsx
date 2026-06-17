@@ -15,7 +15,7 @@ import type {
   CloudinaryConnection,
   CloudinaryHome,
 } from "@/lib/cloudinary.server"
-import { isDirectPhotoCategoryPath } from "@/lib/direct-photo-category"
+import { isDirectPhotoCategoryName } from "@/lib/direct-photo-category"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import { createHomeSeoHead } from "@/lib/seo"
 import { createFileRoute, Link } from "@tanstack/react-router"
@@ -467,7 +467,7 @@ function getHomeCarouselAssetRoute(
     return undefined
   }
 
-  if (isDirectPhotoCategoryPath(asset.folder, "Dolla")) {
+  if (isDirectPhotoCategoryName(asset.categoryName)) {
     return {
       to: getMediaCategoryRoute(isAdminMode),
       params: { category: toMediaRouteSegment(asset.categoryName) },

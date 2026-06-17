@@ -15,6 +15,7 @@ import {
   reorderCloudinaryCategories,
   reorderCloudinaryShoots,
   setCloudinaryAboutContent,
+  setCloudinaryCategoryDescription,
   setCloudinaryCategoryCover,
   setCloudinaryHomeCarouselAsset,
   setCloudinaryPricingItems,
@@ -252,6 +253,11 @@ const setCategoryCoverInput = (data: unknown) => ({
   shootPath: getStringField(data, "shootPath"),
 })
 
+const setCategoryDescriptionInput = (data: unknown) => ({
+  categoryPath: getStringField(data, "categoryPath"),
+  description: getStringField(data, "description"),
+})
+
 const getCloudinaryHomeFn = createServerFn({ method: "GET" })
   .inputValidator(getHomeInput)
   .handler(async ({ data }) => getCloudinaryHome({ refresh: data.refresh }))
@@ -394,6 +400,14 @@ const setCloudinaryCategoryCoverFn = createServerFn({ method: "POST" })
     return setCloudinaryCategoryCover(data)
   })
 
+const setCloudinaryCategoryDescriptionFn = createServerFn({ method: "POST" })
+  .inputValidator(setCategoryDescriptionInput)
+  .handler(async ({ data }) => {
+    assertAdminAuthenticated()
+
+    return setCloudinaryCategoryDescription(data)
+  })
+
 export {
   createCloudinaryFolderFn,
   deleteCloudinaryFolderFn,
@@ -410,6 +424,7 @@ export {
   reorderCloudinaryCategoriesFn,
   reorderCloudinaryShootsFn,
   setCloudinaryAboutContentFn,
+  setCloudinaryCategoryDescriptionFn,
   setCloudinaryCategoryCoverFn,
   setCloudinaryHomeCarouselAssetFn,
   setCloudinaryPricingItemsFn,

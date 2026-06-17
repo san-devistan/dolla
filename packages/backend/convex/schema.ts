@@ -11,14 +11,10 @@ export default defineSchema({
     displayPath: v.string(),
     orderRank: v.number(),
     coverShootPath: nullableString,
-    cloudinaryExternalId: nullableString,
-    cloudinaryCreatedAt: nullableString,
-    cloudinaryUpdatedAt: nullableString,
-    syncedAt: v.number(),
-    deletedAt: nullableNumber,
+    description: v.optional(v.string()),
   })
     .index("by_path", ["path"])
-    .index("by_deletedAt_and_orderRank", ["deletedAt", "orderRank"]),
+    .index("by_orderRank", ["orderRank"]),
   mediaShoots: defineTable({
     path: v.string(),
     categoryPath: v.string(),
@@ -28,19 +24,10 @@ export default defineSchema({
     orderRank: v.number(),
     coverAssetId: nullableString,
     credits: v.optional(v.string()),
-    cloudinaryExternalId: nullableString,
-    cloudinaryCreatedAt: nullableString,
-    cloudinaryUpdatedAt: nullableString,
-    syncedAt: v.number(),
-    deletedAt: nullableNumber,
   })
     .index("by_path", ["path"])
-    .index("by_categoryPath_and_deletedAt_and_orderRank", [
-      "categoryPath",
-      "deletedAt",
-      "orderRank",
-    ])
-    .index("by_deletedAt_and_orderRank", ["deletedAt", "orderRank"]),
+    .index("by_categoryPath_and_orderRank", ["categoryPath", "orderRank"])
+    .index("by_orderRank", ["orderRank"]),
   mediaAssets: defineTable({
     cloudinaryAssetId: v.string(),
     publicId: v.string(),
@@ -60,37 +47,18 @@ export default defineSchema({
     thumbnailUrl: v.string(),
     previewUrl: v.string(),
     displayFolder: v.string(),
-    createdAt: nullableString,
     context: v.record(v.string(), v.string()),
     orderRank: v.number(),
     layoutColumn: v.optional(v.number()),
     layoutOrder: v.optional(v.number()),
     layoutColumnCount: v.optional(v.number()),
     homeCarouselOrderRank: v.optional(v.number()),
-    syncedAt: v.number(),
-    deletedAt: nullableNumber,
   })
     .index("by_cloudinaryAssetId", ["cloudinaryAssetId"])
-    .index("by_assetFolder_and_deletedAt_and_orderRank", [
-      "assetFolder",
-      "deletedAt",
-      "orderRank",
-    ])
-    .index("by_shootPath_and_deletedAt_and_orderRank", [
-      "shootPath",
-      "deletedAt",
-      "orderRank",
-    ])
-    .index("by_categoryPath_and_deletedAt_and_orderRank", [
-      "categoryPath",
-      "deletedAt",
-      "orderRank",
-    ])
-    .index("by_deletedAt_and_createdAt", ["deletedAt", "createdAt"])
-    .index("by_deletedAt_and_homeCarouselOrderRank", [
-      "deletedAt",
-      "homeCarouselOrderRank",
-    ]),
+    .index("by_assetFolder_and_orderRank", ["assetFolder", "orderRank"])
+    .index("by_shootPath_and_orderRank", ["shootPath", "orderRank"])
+    .index("by_categoryPath_and_orderRank", ["categoryPath", "orderRank"])
+    .index("by_homeCarouselOrderRank", ["homeCarouselOrderRank"]),
   siteContent: defineTable({
     key: v.string(),
     blocks: v.array(
@@ -101,7 +69,6 @@ export default defineSchema({
         bold: v.boolean(),
       })
     ),
-    updatedAt: v.number(),
   }).index("by_key", ["key"]),
   siteAssets: defineTable({
     key: v.string(),
@@ -119,14 +86,10 @@ export default defineSchema({
     thumbnailUrl: v.string(),
     previewUrl: v.string(),
     displayFolder: v.string(),
-    createdAt: nullableString,
     context: v.record(v.string(), v.string()),
-    updatedAt: v.number(),
-    deletedAt: nullableNumber,
   }).index("by_key", ["key"]),
   contactSettings: defineTable({
     key: v.string(),
     notificationRecipients: v.array(v.string()),
-    updatedAt: v.number(),
   }).index("by_key", ["key"]),
 })

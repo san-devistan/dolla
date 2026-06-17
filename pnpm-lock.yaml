@@ -78,7 +78,7 @@ importers:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       nitro:
-        specifier: latest
+        specifier: 3.0.260603-beta
         version: 3.0.260603-beta(dotenv@17.4.2)(jiti@2.7.0)(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0))
       react:
         specifier: ^19.2.6

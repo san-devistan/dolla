@@ -8,6 +8,7 @@ import {
   renameCloudinaryFolderFn,
   reorderCloudinaryAssetsFn,
   reorderCloudinaryShootsFn,
+  setCloudinaryCategoryDescriptionFn,
   setCloudinaryCategoryCoverFn,
   setCloudinaryHomeCarouselAssetFn,
 } from "@/features/cloudinary/cloudinary.functions"
@@ -37,7 +38,6 @@ import {
   createCategorySeoHead,
   createNoindexSeoHead,
   getCategorySeoDescription,
-  getCategorySeoTitle,
 } from "@/lib/seo"
 import {
   type AssetDropPosition,
@@ -94,6 +94,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { toast } from "@workspace/ui/components/sonner"
+import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   AlertTriangleIcon,
@@ -212,6 +213,9 @@ function CategoryPage({
   const [renameName, setRenameName] = useState(
     initialCategoryPage.category?.name || ""
   )
+  const [descriptionDraft, setDescriptionDraft] = useState(
+    getEditableCategoryDescription(initialCategoryPage.category || undefined)
+  )
   const [isRenamingCategory, setIsRenamingCategory] = useState(false)
   const [draggingShootPath, setDraggingShootPath] = useState<string | null>(
     null
@@ -244,6 +248,7 @@ function CategoryPage({
   const reorderAssets = useServerFn(reorderCloudinaryAssetsFn)
   const reorderShoots = useServerFn(reorderCloudinaryShootsFn)
   const setCategoryCover = useServerFn(setCloudinaryCategoryCoverFn)
+  const setCategoryDescription = useServerFn(setCloudinaryCategoryDescriptionFn)
   const setHomeCarouselAsset = useServerFn(setCloudinaryHomeCarouselAssetFn)
   const selectedCategory = categoryPage.category || undefined
   const selectedCategoryPath = selectedCategory?.path
@@ -275,6 +280,7 @@ function CategoryPage({
     !isDirectPhotoCategory
   const canRenameCategory =
     canMutate && Boolean(selectedCategory) && !isDirectPhotoCategory
+  const canEditCategoryDescription = canMutate && Boolean(selectedCategory)
   const canDeleteSelectedShoots = canMutate && selectedShootPaths.size > 0
   const canMoveSelectedShoots =
     canMutate && selectedShootPaths.size > 0 && moveTargetCategories.length > 0
@@ -282,10 +288,17 @@ function CategoryPage({
     canMutate && Boolean(selectedCategory) && isDirectPhotoCategory
   const canOrganizeCategoryPhotos = canUploadCategoryPhotos
   const canDeleteSelectedAssets = canMutate && selectedAssetIds.size > 0
+  const directCategoryShootPath =
+    selectedCategory?.coverShootPath ||
+    assets[0]?.folder ||
+    selectedCategoryPath
 
   useEffect(() => {
     setCategoryPage(initialCategoryPage)
     setRenameName(initialCategoryPage.category?.name || "")
+    setDescriptionDraft(
+      getEditableCategoryDescription(initialCategoryPage.category || undefined)
+    )
     setIsRenamingCategory(false)
     setDraggingShootPath(null)
     setShootDropTarget(null)
@@ -342,9 +355,8 @@ function CategoryPage({
       return
     }
 
-    const nextShootPath = `${selectedCategory.path}/${nextShootName}`
     const createShootPromise = performCategoryAction(async () => {
-      await createFolder({
+      const createdShootLibrary = await createFolder({
         data: {
           name: nextShootName,
           parentPath: selectedCategory.path,
@@ -352,7 +364,10 @@ function CategoryPage({
       })
 
       if (createShootFiles.length > 0) {
-        await uploadFilesToShoot(nextShootPath, createShootFiles)
+        await uploadFilesToShoot(
+          createdShootLibrary.selectedFolder,
+          createShootFiles
+        )
       }
 
       return await getCategory({
@@ -452,7 +467,10 @@ function CategoryPage({
       const uploadFiles = await prepareImageUploadFiles(files)
       const formData = new FormData()
 
-      formData.set("folderPath", selectedCategory.path)
+      formData.set(
+        "folderPath",
+        directCategoryShootPath || selectedCategory.path
+      )
 
       for (const file of uploadFiles) {
         formData.append("files", file)
@@ -473,7 +491,7 @@ function CategoryPage({
       }
 
       const nextCategoryPage = await getCategory({
-        data: { categoryName: selectedCategory.name, refresh: true },
+        data: { categoryName: selectedCategory.name },
       })
 
       setCategoryPage(nextCategoryPage)
@@ -499,36 +517,70 @@ function CategoryPage({
       return
     }
 
-    if (nextName === selectedCategory.name) {
+    const nextDescription = normalizeCategoryDescriptionDraft(descriptionDraft)
+    const currentDescription = normalizeCategoryDescriptionDraft(
+      getEditableCategoryDescription(selectedCategory)
+    )
+    const isNameChanged = nextName !== selectedCategory.name
+    const isDescriptionChanged = nextDescription !== currentDescription
+
+    if (!isNameChanged && !isDescriptionChanged) {
       setIsRenamingCategory(false)
       return
     }
 
-    const renameCategoryPromise = performCategoryAction(async () => {
-      await renameFolder({
-        data: {
-          folderPath: selectedCategory.path,
-          name: nextName,
-        },
+    const saveCategoryPromise = performCategoryAction(async () => {
+      let nextCategoryName = selectedCategory.name
+      let nextCategoryPath = selectedCategory.path
+
+      if (isNameChanged) {
+        await renameFolder({
+          data: {
+            folderPath: selectedCategory.path,
+            name: nextName,
+          },
+        })
+
+        nextCategoryName = nextName
+
+        const renamedCategoryPage = await getCategory({
+          data: { categoryName: nextName },
+        })
+
+        nextCategoryPath =
+          renamedCategoryPage.category?.path || nextCategoryPath
+      }
+
+      if (isDescriptionChanged) {
+        await setCategoryDescription({
+          data: {
+            categoryPath: nextCategoryPath,
+            description: nextDescription,
+          },
+        })
+      }
+
+      return await getCategory({
+        data: { categoryName: nextCategoryName },
       })
-
-      return await getCategory({ data: { categoryName: nextName } })
     })
 
-    toast.promise(renameCategoryPromise, {
-      loading: "Renaming category...",
-      success: "Category renamed",
-      error: (renameError) => getErrorMessage(renameError),
+    toast.promise(saveCategoryPromise, {
+      loading: "Saving category...",
+      success: "Category saved",
+      error: (saveError) => getErrorMessage(saveError),
     })
 
-    void renameCategoryPromise
+    void saveCategoryPromise
       .then(() => {
         setIsRenamingCategory(false)
 
-        void navigate({
-          to: getMediaCategoryRoute(isAdminMode),
-          params: { category: toMediaRouteSegment(nextName) },
-        })
+        if (isNameChanged) {
+          void navigate({
+            to: getMediaCategoryRoute(isAdminMode),
+            params: { category: toMediaRouteSegment(nextName) },
+          })
+        }
 
         return undefined
       })
@@ -541,11 +593,13 @@ function CategoryPage({
     }
 
     setRenameName(selectedCategory.name)
+    setDescriptionDraft(getEditableCategoryDescription(selectedCategory))
     setIsRenamingCategory(true)
   }
 
   function cancelRenamingCategory() {
     setRenameName(selectedCategory?.name || "")
+    setDescriptionDraft(getEditableCategoryDescription(selectedCategory))
     setIsRenamingCategory(false)
   }
 
@@ -558,7 +612,7 @@ function CategoryPage({
       await deleteFolder({ data: { folderPath: selectedCategory.path } })
 
       return await getCategory({ data: { categoryName: category } })
-    }, "Category deleted").then((didSucceed) => {
+    }, "Category removed").then((didSucceed) => {
       if (didSucceed) {
         void navigate({ to: getMediaHomeRoute(isAdminMode) })
       }
@@ -605,7 +659,7 @@ function CategoryPage({
       )
 
       return await getCategory({
-        data: { categoryName: selectedCategory.name, refresh: true },
+        data: { categoryName: selectedCategory.name },
       })
     })
 
@@ -653,7 +707,7 @@ function CategoryPage({
       })
 
       return await getCategory({
-        data: { categoryName: selectedCategory.name, refresh: true },
+        data: { categoryName: selectedCategory.name },
       })
     })
 
@@ -1009,7 +1063,7 @@ function CategoryPage({
 
     void reorderAssets({
       data: {
-        shootPath: selectedCategory.path,
+        shootPath: directCategoryShootPath || selectedCategory.path,
         selectedFolder: selectedCategory.path,
         assetIds: orderedAssets.map((asset) => asset.assetId),
         assetLayouts: getAssetLayoutOrder(orderedAssets, masonryColumnCount),
@@ -1042,14 +1096,14 @@ function CategoryPage({
     const deleteAssetsPromise = performCategoryAction(async () => {
       await deleteShootAssets({
         data: {
-          shootPath: selectedCategory.path,
+          shootPath: directCategoryShootPath || selectedCategory.path,
           selectedFolder: selectedCategory.path,
           assetIds,
         },
       })
 
       return await getCategory({
-        data: { categoryName: selectedCategory.name, refresh: true },
+        data: { categoryName: selectedCategory.name },
       })
     })
 
@@ -1166,15 +1220,18 @@ function CategoryPage({
         <>
           <DirectCategoryPhotoSurface
             assets={assets}
+            canEditDescription={canEditCategoryDescription}
             canOrganizeAssets={canOrganizeCategoryPhotos}
             canUpload={canUploadCategoryPhotos}
             category={selectedCategory}
             columnCount={masonryColumnCount}
             connection={categoryPage.connection}
+            descriptionDraft={descriptionDraft}
             draggingAssetId={draggingAssetId}
             dropTarget={assetDropTarget}
             isAdminMode={isAdminMode}
             isBusy={isBusy}
+            isEditingCategory={isRenamingCategory}
             selectedAssetIds={selectedAssetIds}
             uploadInputRef={uploadInputRef}
             onAssetDragEnd={handleAssetDragEnd}
@@ -1185,7 +1242,11 @@ function CategoryPage({
             onAssetSelectionChange={toggleAssetSelection}
             onColumnDragOver={handleColumnDragOver}
             onColumnDrop={handleColumnDrop}
+            onCancelCategoryEdit={cancelRenamingCategory}
+            onDescriptionDraftChange={setDescriptionDraft}
             onOpenAsset={openAssetViewer}
+            onSaveCategoryEdit={handleRenameCategory}
+            onStartCategoryEdit={startRenamingCategory}
             onToggleHomeCarouselAsset={handleToggleHomeCarouselAsset}
             onUploadClick={handleCategoryPhotoUploadClick}
             onUploadFileChange={handleCategoryPhotoUploadFileChange}
@@ -1209,6 +1270,7 @@ function CategoryPage({
       ) : selectedCategory ? (
         <>
           <CategoryShootSurface
+            canEditDescription={canEditCategoryDescription}
             canCreateShoot={canCreateShoot}
             canDeleteCategory={canRenameCategory}
             canOrganize={canOrganizeShoots}
@@ -1217,6 +1279,7 @@ function CategoryPage({
             connection={categoryPage.connection}
             createShootFiles={createShootFiles}
             createShootName={createShootName}
+            descriptionDraft={descriptionDraft}
             draggingShootPath={draggingShootPath}
             isAdminMode={isAdminMode}
             isBusy={isBusy}
@@ -1232,6 +1295,7 @@ function CategoryPage({
             onCreateShootFilesChange={handleCreateShootFilesChange}
             onCreateShootNameChange={setCreateShootName}
             onDeleteCategory={handleDeleteCategory}
+            onDescriptionDraftChange={setDescriptionDraft}
             onDragEnd={handleShootDragEnd}
             onRenameCategory={handleRenameCategory}
             onRenameNameChange={setRenameName}
@@ -1268,15 +1332,18 @@ export { CategoryPage }
 
 function DirectCategoryPhotoSurface({
   assets,
+  canEditDescription,
   canOrganizeAssets,
   canUpload,
   category,
   columnCount,
   connection,
+  descriptionDraft,
   draggingAssetId,
   dropTarget,
   isAdminMode,
   isBusy,
+  isEditingCategory,
   selectedAssetIds,
   uploadInputRef,
   onAssetDragEnd,
@@ -1285,23 +1352,30 @@ function DirectCategoryPhotoSurface({
   onAssetDrop,
   onAssetInsertionDragOver,
   onAssetSelectionChange,
+  onCancelCategoryEdit,
   onColumnDragOver,
   onColumnDrop,
+  onDescriptionDraftChange,
   onOpenAsset,
+  onSaveCategoryEdit,
+  onStartCategoryEdit,
   onToggleHomeCarouselAsset,
   onUploadClick,
   onUploadFileChange,
 }: {
   assets: CloudinaryAsset[]
+  canEditDescription: boolean
   canOrganizeAssets: boolean
   canUpload: boolean
   category: CloudinaryFolder
   columnCount: number
   connection: CloudinaryConnection
+  descriptionDraft: string
   draggingAssetId: string | null
   dropTarget: AssetDropTarget | null
   isAdminMode: boolean
   isBusy: boolean
+  isEditingCategory: boolean
   selectedAssetIds: Set<string>
   uploadInputRef: RefObject<HTMLInputElement | null>
   onAssetDragEnd: () => void
@@ -1314,9 +1388,13 @@ function DirectCategoryPhotoSurface({
     position: AssetDropPosition
   ) => void
   onAssetSelectionChange: (assetId: string, selected?: boolean) => void
+  onCancelCategoryEdit: () => void
   onColumnDragOver: (event: DragEvent<HTMLElement>, columnIndex: number) => void
   onColumnDrop: (event: DragEvent<HTMLElement>, columnIndex: number) => void
+  onDescriptionDraftChange: (description: string) => void
   onOpenAsset: (assetId: string) => void
+  onSaveCategoryEdit: (event: FormEvent<HTMLFormElement>) => void
+  onStartCategoryEdit: () => void
   onToggleHomeCarouselAsset: (assetId: string, selected: boolean) => void
   onUploadClick: () => void
   onUploadFileChange: (event: ChangeEvent<HTMLInputElement>) => void
@@ -1325,17 +1403,63 @@ function DirectCategoryPhotoSurface({
     <>
       <section className="mx-auto w-full max-w-[1540px] px-4 pb-4 sm:px-6 md:pt-0 md:pb-8 lg:px-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
-              {getCategoryHeading(category.name, isAdminMode)}
-            </h1>
-            <PublicCategoryDescription
-              categoryName={category.name}
-              isAdminMode={isAdminMode}
-            />
+          <div className="min-w-0 flex-1">
+            {isEditingCategory ? (
+              <form className="grid w-full gap-3" onSubmit={onSaveCategoryEdit}>
+                <div className="flex w-full max-w-3xl items-center gap-3">
+                  <h1 className="min-w-0 flex-1 font-heading text-4xl leading-none tracking-normal md:text-6xl">
+                    {category.name}
+                  </h1>
+                  <CategoryEditActions
+                    canSave={canEditDescription && !isBusy}
+                    isBusy={isBusy}
+                    onCancel={onCancelCategoryEdit}
+                  />
+                </div>
+                <CategoryDescription
+                  canEditDescription={canEditDescription}
+                  canSaveEdit={canEditDescription && !isBusy}
+                  category={category}
+                  descriptionDraft={descriptionDraft}
+                  isAdminMode={isAdminMode}
+                  isBusy={isBusy}
+                  isEditing={isEditingCategory}
+                  onCancelEdit={onCancelCategoryEdit}
+                  onDescriptionDraftChange={onDescriptionDraftChange}
+                />
+              </form>
+            ) : (
+              <>
+                <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
+                  {category.name}
+                </h1>
+                <CategoryDescription
+                  canEditDescription={canEditDescription}
+                  canSaveEdit={false}
+                  category={category}
+                  descriptionDraft={descriptionDraft}
+                  isAdminMode={isAdminMode}
+                  isBusy={isBusy}
+                  isEditing={false}
+                  onCancelEdit={onCancelCategoryEdit}
+                  onDescriptionDraftChange={onDescriptionDraftChange}
+                />
+              </>
+            )}
           </div>
           {isAdminMode ? (
             <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant={isEditingCategory ? "secondary" : "outline"}
+                size="icon-sm"
+                disabled={!canEditDescription || isBusy}
+                aria-pressed={isEditingCategory}
+                onClick={onStartCategoryEdit}
+              >
+                <PencilIcon />
+                <span className="sr-only">Edit category</span>
+              </Button>
               <UploadPhotosButton
                 canUpload={canUpload}
                 isBusy={isBusy}
@@ -1377,6 +1501,7 @@ function DirectCategoryPhotoSurface({
 }
 
 function CategoryShootSurface({
+  canEditDescription,
   canCreateShoot,
   canDeleteCategory,
   canOrganize,
@@ -1385,6 +1510,7 @@ function CategoryShootSurface({
   connection,
   createShootFiles,
   createShootName,
+  descriptionDraft,
   draggingShootPath,
   isAdminMode,
   isBusy,
@@ -1400,6 +1526,7 @@ function CategoryShootSurface({
   onCreateShootFilesChange,
   onCreateShootNameChange,
   onDeleteCategory,
+  onDescriptionDraftChange,
   onDragEnd,
   onRenameCategory,
   onRenameNameChange,
@@ -1410,6 +1537,7 @@ function CategoryShootSurface({
   onShootSelectionChange,
   onStartRenamingCategory,
 }: {
+  canEditDescription: boolean
   canCreateShoot: boolean
   canDeleteCategory: boolean
   canOrganize: boolean
@@ -1418,6 +1546,7 @@ function CategoryShootSurface({
   connection: CloudinaryConnection
   createShootFiles: File[]
   createShootName: string
+  descriptionDraft: string
   draggingShootPath: string | null
   isAdminMode: boolean
   isBusy: boolean
@@ -1433,6 +1562,7 @@ function CategoryShootSurface({
   onCreateShootFilesChange: (event: ChangeEvent<HTMLInputElement>) => void
   onCreateShootNameChange: (name: string) => void
   onDeleteCategory: () => void
+  onDescriptionDraftChange: (description: string) => void
   onDragEnd: () => void
   onRenameCategory: (event: FormEvent<HTMLFormElement>) => void
   onRenameNameChange: (name: string) => void
@@ -1462,50 +1592,58 @@ function CategoryShootSurface({
     >
       {isAdminMode ? <ConnectionNotice connection={connection} /> : null}
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mb-7">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           {isRenamingCategory ? (
-            <form
-              className="flex max-w-3xl items-center gap-3"
-              onSubmit={onRenameCategory}
-            >
-              <Input
-                ref={renameInputRef}
-                aria-label="Category folder name"
-                value={renameName}
-                className="h-auto border-x-0 border-t-0 py-0 font-heading text-4xl leading-none tracking-normal md:text-6xl"
-                disabled={!canRenameCategory || isBusy}
-                onChange={(event) => onRenameNameChange(event.target.value)}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={
-                  !canRenameCategory || isBusy || renameName.trim() === ""
+            <form className="grid w-full gap-3" onSubmit={onRenameCategory}>
+              <div className="flex w-full max-w-3xl items-center gap-3">
+                <Input
+                  ref={renameInputRef}
+                  aria-label="Category folder name"
+                  value={renameName}
+                  className="h-auto border-x-0 border-t-0 py-0 font-heading text-4xl leading-none tracking-normal md:text-6xl"
+                  disabled={!canRenameCategory || isBusy}
+                  onChange={(event) => onRenameNameChange(event.target.value)}
+                />
+                <CategoryEditActions
+                  canSave={
+                    canRenameCategory && !isBusy && renameName.trim() !== ""
+                  }
+                  isBusy={isBusy}
+                  onCancel={onCancelRenamingCategory}
+                />
+              </div>
+              <CategoryDescription
+                canEditDescription={canEditDescription}
+                canSaveEdit={
+                  canRenameCategory && !isBusy && renameName.trim() !== ""
                 }
-              >
-                <CheckIcon />
-                <span className="sr-only">Save category name</span>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                disabled={isBusy}
-                onClick={onCancelRenamingCategory}
-              >
-                <XIcon />
-                <span className="sr-only">Cancel category rename</span>
-              </Button>
+                category={category}
+                descriptionDraft={descriptionDraft}
+                isAdminMode={isAdminMode}
+                isBusy={isBusy}
+                isEditing
+                onCancelEdit={onCancelRenamingCategory}
+                onDescriptionDraftChange={onDescriptionDraftChange}
+              />
             </form>
           ) : (
-            <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
-              {getCategoryHeading(category.name, isAdminMode)}
-            </h1>
+            <>
+              <h1 className="font-heading text-4xl leading-none tracking-normal md:text-6xl">
+                {category.name}
+              </h1>
+              <CategoryDescription
+                canEditDescription={canEditDescription}
+                canSaveEdit={false}
+                category={category}
+                descriptionDraft={descriptionDraft}
+                isAdminMode={isAdminMode}
+                isBusy={isBusy}
+                isEditing={false}
+                onCancelEdit={onCancelRenamingCategory}
+                onDescriptionDraftChange={onDescriptionDraftChange}
+              />
+            </>
           )}
-          <PublicCategoryDescription
-            categoryName={category.name}
-            isAdminMode={isAdminMode}
-          />
         </div>
         {isAdminMode ? (
           <div className="flex flex-wrap gap-2">
@@ -1704,7 +1842,7 @@ function DeleteCategoryDialog({
         }
       >
         <Trash2Icon />
-        <span className="sr-only">Delete category</span>
+        <span className="sr-only">Remove category</span>
       </AlertDialogTrigger>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
@@ -1713,9 +1851,8 @@ function DeleteCategoryDialog({
           </AlertDialogMedia>
           <AlertDialogTitle>Delete category?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete &quot;{category.name}&quot;, every
-            shoot inside this category, and all photos in those shoots. This
-            cannot be undone.
+            This removes &quot;{category.name}&quot; and every shoot inside it
+            from the site, including their Cloudinary files.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -2038,9 +2175,8 @@ function SelectedShootsActionBar({
             </AlertDialogMedia>
             <AlertDialogTitle>Delete selected shoots?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {selectedCount} selected shoot
-              {selectedCount === 1 ? "" : "s"} and all photos inside. This
-              cannot be undone.
+              This permanently deletes {selectedCount} selected shoot
+              {selectedCount === 1 ? "" : "s"} and their Cloudinary files.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2076,26 +2212,109 @@ function MissingCategory({ categoryName }: { categoryName: string }) {
   )
 }
 
-function PublicCategoryDescription({
-  categoryName,
-  isAdminMode,
+function CategoryEditActions({
+  canSave,
+  isBusy,
+  onCancel,
 }: {
-  categoryName: string
-  isAdminMode: boolean
+  canSave: boolean
+  isBusy: boolean
+  onCancel: () => void
 }) {
-  if (isAdminMode) {
-    return null
-  }
-
   return (
-    <p className="mt-3 max-w-3xl font-sans text-sm leading-relaxed text-muted-foreground md:text-base">
-      {getCategorySeoDescription(categoryName)}
-    </p>
+    <div className="flex shrink-0 items-center gap-2">
+      <Button type="submit" size="icon" disabled={!canSave}>
+        <CheckIcon />
+        <span className="sr-only">Save category</span>
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        disabled={isBusy}
+        onClick={onCancel}
+      >
+        <XIcon />
+        <span className="sr-only">Cancel category edit</span>
+      </Button>
+    </div>
   )
 }
 
-function getCategoryHeading(categoryName: string, isAdminMode: boolean) {
-  return isAdminMode ? categoryName : getCategorySeoTitle(categoryName)
+function CategoryDescription({
+  canEditDescription,
+  canSaveEdit,
+  category,
+  descriptionDraft,
+  isAdminMode,
+  isBusy,
+  isEditing,
+  onCancelEdit,
+  onDescriptionDraftChange,
+}: {
+  canEditDescription: boolean
+  canSaveEdit: boolean
+  category: CloudinaryFolder
+  descriptionDraft: string
+  isAdminMode: boolean
+  isBusy: boolean
+  isEditing: boolean
+  onCancelEdit: () => void
+  onDescriptionDraftChange: (description: string) => void
+}) {
+  const description = getEditableCategoryDescription(category)
+  const hasDescription = description.length > 0
+  const shouldShowEditor = isAdminMode && isEditing
+
+  if (!hasDescription && !shouldShowEditor) {
+    return null
+  }
+
+  if (shouldShowEditor) {
+    return (
+      <div className="mt-3 flex w-full items-start gap-3">
+        <Textarea
+          id="category-description"
+          aria-label="Category description"
+          value={descriptionDraft}
+          disabled={!canEditDescription || isBusy}
+          maxLength={2000}
+          placeholder="Description (optional)"
+          className="min-h-20 min-w-0 flex-1 py-2 font-sans text-sm leading-relaxed text-muted-foreground md:text-base"
+          onChange={(event) => onDescriptionDraftChange(event.target.value)}
+        />
+        <CategoryEditActions
+          canSave={canSaveEdit}
+          isBusy={isBusy}
+          onCancel={onCancelEdit}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 flex w-full flex-wrap items-start gap-x-2 gap-y-1">
+      <p className="min-w-0 flex-1 font-sans text-sm leading-relaxed text-muted-foreground md:text-base">
+        {description}
+      </p>
+    </div>
+  )
+}
+
+function getEditableCategoryDescription(
+  category: CloudinaryFolder | undefined
+) {
+  if (!category) {
+    return ""
+  }
+
+  return normalizeCategoryDescriptionDraft(
+    category.description ?? getCategorySeoDescription(category.name)
+  )
+}
+
+function normalizeCategoryDescriptionDraft(description: string) {
+  return description.trim().replace(/\s+/g, " ")
 }
 
 function ConnectionNotice({

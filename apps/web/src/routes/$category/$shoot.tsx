@@ -33,6 +33,7 @@ import {
   Link,
   notFound,
   useNavigate,
+  useRouter,
 } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import {
@@ -210,6 +211,7 @@ function ShootPage({
   params: ShootRouteParams
 }) {
   const navigate = useNavigate()
+  const router = useRouter()
   const [shootPage, setShootPage] = useState(initialShootPage)
   const [renameName, setRenameName] = useState(
     initialShootPage.shoot?.name || ""
@@ -473,7 +475,7 @@ function ShootPage({
         void navigate({
           to: getMediaCategoryRoute(isAdminMode),
           params: { category: toMediaRouteSegment(categoryFolder.name) },
-        })
+        }).then(() => router.invalidate())
       }
 
       return undefined
@@ -1138,8 +1140,8 @@ function DeleteShootDialog({
           </AlertDialogMedia>
           <AlertDialogTitle>Delete shoot?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete &quot;{shoot.name}&quot; and all photos
-            in this shoot. This cannot be undone.
+            This permanently deletes &quot;{shoot.name}&quot; and its Cloudinary
+            files.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

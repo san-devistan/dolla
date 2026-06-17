@@ -175,11 +175,13 @@ function createCategorySeoHead(
   const categoryName = getCategoryName(categoryPage, routeCategory)
   const categorySlug = toMediaRouteSegment(categoryName)
   const details = getCategorySeoDetails(categorySlug, categoryName)
+  const description =
+    getCategoryPageDescription(categoryPage) || details.description
   const image = getCategoryImage(categoryPage, details)
 
   return createSeoHead({
     title: `${details.title} | ${SITE_NAME}`,
-    description: details.description,
+    description,
     image,
     keywords: details.keywords,
     path: `/${categorySlug}`,
@@ -256,6 +258,16 @@ function getCategoryImage(
     getAssetSeoImage(categoryPage?.shoots[0]?.cover || undefined) ||
     details.image
   )
+}
+
+function getCategoryPageDescription(
+  categoryPage: CloudinaryCategoryPage | undefined
+) {
+  if (typeof categoryPage?.category?.description !== "string") {
+    return null
+  }
+
+  return categoryPage.category.description.trim()
 }
 
 function getShootDescription(
