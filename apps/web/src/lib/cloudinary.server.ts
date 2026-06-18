@@ -38,6 +38,13 @@ type CloudinaryUploadResult = {
   context?: object
 }
 
+type CloudinaryDirectUploadSignature = {
+  cloudName: string
+  apiKey: string
+  uploadUrl: string
+  fields: Record<string, string>
+}
+
 type CloudinarySearchBuilder = typeof cloudinary.search
 
 type CloudinaryRawFolder = {
@@ -2922,29 +2929,8 @@ async function deleteCloudinaryShootAssets({
 async function uploadCloudinaryFile(file: File, folderPath: string) {
   configureCloudinary()
 
-  const selectedFolder = await resolveDirectPhotoCategoryShootPath(
-    normalizeDollaFolderPath(folderPath)
-  )
-  const folderInfo = getFolderInfo(selectedFolder)
-  const isRootShootFolder =
-    folderInfo.kind === "category" &&
-    !isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER) &&
-    (await isActiveConvexShootFolder(selectedFolder))
-
-  if (
-    folderInfo.kind !== "shoot" &&
-    !isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER) &&
-    !isRootShootFolder
-  ) {
-    throw new Error("Upload photos into a shoot folder or Mariage.")
-  }
-
-  if (
-    isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER)
-  ) {
-    await ensureCloudinaryFolderExists(selectedFolder)
-  }
-
+  const selectedFolder =
+    await resolveCloudinaryPhotoUploadFolderPath(folderPath)
   const bytes = Buffer.from(await file.arrayBuffer())
 
   const result = await new Promise<CloudinaryUploadResult>(
@@ -2978,7 +2964,155 @@ async function uploadCloudinaryFile(file: File, folderPath: string) {
     }
   )
 
-  const asset = mapAsset(result)
+  return syncUploadedCloudinaryAsset(mapAsset(result))
+}
+
+async function createCloudinaryDirectUploadSignature({
+  folderPath,
+  target,
+}: {
+  folderPath: string
+  target?: string
+}): Promise<CloudinaryDirectUploadSignature> {
+  configureCloudinary()
+
+  if (target === "about-image") {
+    return signCloudinaryUploadParams({
+      asset_folder: CLOUDINARY_ROOT_FOLDER,
+      display_name: "About image",
+      invalidate: "true",
+      overwrite: "true",
+      public_id: ABOUT_IMAGE_PUBLIC_ID,
+      tags: "dolla-admin,dolla-about",
+      timestamp: getCloudinaryUploadTimestamp(),
+      unique_filename: "false",
+      use_filename: "false",
+    })
+  }
+
+  const selectedFolder =
+    await resolveCloudinaryPhotoUploadFolderPath(folderPath)
+
+  return signCloudinaryUploadParams({
+    asset_folder: selectedFolder,
+    overwrite: "false",
+    tags: "dolla-admin",
+    timestamp: getCloudinaryUploadTimestamp(),
+    unique_filename: "true",
+    use_filename: "true",
+    use_filename_as_display_name: "true",
+  })
+}
+
+async function completeCloudinaryDirectUpload({
+  folderPath,
+  target,
+  uploadResult,
+}: {
+  folderPath: string
+  target?: string
+  uploadResult: unknown
+}) {
+  configureCloudinary()
+
+  if (target === "about-image") {
+    return {
+      about: await completeCloudinaryAboutImageUpload(uploadResult),
+    }
+  }
+
+  const selectedFolder =
+    await resolveCloudinaryPhotoUploadFolderPath(folderPath)
+  const asset = await getVerifiedCloudinaryUploadAsset(uploadResult)
+
+  if (asset.folder !== selectedFolder) {
+    throw new Error("Uploaded photo was stored in the wrong folder.")
+  }
+
+  return {
+    assets: [await syncUploadedCloudinaryAsset(asset)],
+    folderPath: selectedFolder,
+  }
+}
+
+function getCloudinaryUploadTimestamp() {
+  return String(Math.floor(Date.now() / 1000))
+}
+
+function signCloudinaryUploadParams(
+  params: Record<string, string>
+): CloudinaryDirectUploadSignature {
+  const credentials = getCloudinaryAdminCredentials()
+  const signature = cloudinary.utils.api_sign_request(
+    params,
+    credentials.apiSecret
+  )
+
+  return {
+    cloudName: credentials.cloudName,
+    apiKey: credentials.apiKey,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${credentials.cloudName}/image/upload`,
+    fields: {
+      ...params,
+      signature,
+    },
+  }
+}
+
+async function resolveCloudinaryPhotoUploadFolderPath(folderPath: string) {
+  const selectedFolder = await resolveDirectPhotoCategoryShootPath(
+    normalizeDollaFolderPath(folderPath)
+  )
+  const folderInfo = getFolderInfo(selectedFolder)
+  const isRootShootFolder =
+    folderInfo.kind === "category" &&
+    !isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER) &&
+    (await isActiveConvexShootFolder(selectedFolder))
+
+  if (
+    folderInfo.kind !== "shoot" &&
+    !isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER) &&
+    !isRootShootFolder
+  ) {
+    throw new Error("Upload photos into a shoot folder or Mariage.")
+  }
+
+  if (
+    isDirectPhotoCategoryPath(folderInfo.folderPath, CLOUDINARY_ROOT_FOLDER)
+  ) {
+    await ensureCloudinaryFolderExists(selectedFolder)
+  }
+
+  return selectedFolder
+}
+
+async function getVerifiedCloudinaryUploadAsset(uploadResult: unknown) {
+  const uploadedAsset = readRawAsset(uploadResult)
+
+  if (!uploadedAsset?.public_id || !uploadedAsset.asset_id) {
+    throw new Error("Cloudinary did not return an uploaded asset.")
+  }
+
+  const response = await cloudinary.api.resource(uploadedAsset.public_id, {
+    resource_type: "image",
+  })
+  const canonicalAsset = readRawAsset(response)
+
+  if (!canonicalAsset) {
+    throw new Error("Uploaded photo could not be verified in Cloudinary.")
+  }
+
+  if (
+    !canonicalAsset.asset_id ||
+    uploadedAsset.asset_id !== canonicalAsset.asset_id
+  ) {
+    throw new Error("Uploaded photo verification failed.")
+  }
+
+  return mapAsset(canonicalAsset)
+}
+
+async function syncUploadedCloudinaryAsset(asset: CloudinaryAsset) {
   const convexClient = getConvexMediaClient()
 
   if (convexClient) {
@@ -3122,6 +3256,35 @@ async function uploadCloudinaryAboutImage(file: File) {
   )
 
   return mapAsset(result)
+}
+
+async function completeCloudinaryAboutImageUpload(uploadResult: unknown) {
+  const convexClient = getRequiredConvexMediaClient()
+  const previousImage = await getCurrentCloudinaryAboutImage()
+  const uploadedImage = await getVerifiedCloudinaryUploadAsset(uploadResult)
+
+  if (
+    uploadedImage.folder !== CLOUDINARY_ROOT_FOLDER ||
+    uploadedImage.publicId !== ABOUT_IMAGE_PUBLIC_ID
+  ) {
+    throw new Error("Uploaded about image was stored in the wrong location.")
+  }
+
+  try {
+    await convexClient.mutation(api.media.setSiteAsset, {
+      key: ABOUT_IMAGE_SITE_ASSET_KEY,
+      asset: mapSiteAsset(uploadedImage),
+    })
+  } catch (error) {
+    await deleteCloudinaryAssets([uploadedImage]).catch(() => undefined)
+    throw error
+  }
+
+  if (previousImage && previousImage.publicId !== uploadedImage.publicId) {
+    await deleteCloudinaryAssets([previousImage])
+  }
+
+  return getCloudinaryAbout()
 }
 
 function validateImageFile(file: File) {
@@ -3345,7 +3508,9 @@ function getUnknownErrorMessage(error: unknown): string | null {
 
 export {
   CLOUDINARY_ROOT_FOLDER,
+  completeCloudinaryDirectUpload,
   createCloudinaryFolder,
+  createCloudinaryDirectUploadSignature,
   deleteCloudinaryFolder,
   deleteCloudinaryShootAssets,
   getCloudinaryErrorMessage,

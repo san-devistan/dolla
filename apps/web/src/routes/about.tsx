@@ -7,6 +7,7 @@ import {
   type AboutRichTextEditorHandle,
 } from "@/features/cloudinary/about-rich-text-editor"
 import { AboutText } from "@/features/cloudinary/about-text"
+import { uploadAdminCloudinaryFiles } from "@/features/cloudinary/admin-upload"
 import {
   getCloudinaryAboutFn,
   setCloudinaryAboutContentFn,
@@ -123,22 +124,13 @@ function AboutPage({
       return
     }
 
-    const formData = new FormData()
-
-    formData.set("target", "about-image")
-    formData.append("files", file)
     setIsBusy(true)
 
     try {
-      const response = await fetch("/api/cloudinary/upload", {
-        method: "POST",
-        body: formData,
+      await uploadAdminCloudinaryFiles({
+        files: [file],
+        target: "about-image",
       })
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(getUploadError(result) || "Upload failed.")
-      }
 
       const nextAbout = await getAbout()
 
@@ -322,16 +314,6 @@ function AboutEditor({
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Action failed."
-}
-
-function getUploadError(result: unknown) {
-  if (!result || typeof result !== "object") {
-    return ""
-  }
-
-  const error = Reflect.get(result, "error")
-
-  return typeof error === "string" ? error : ""
 }
 
 function getConnectionIssue(connection: CloudinaryConnection) {

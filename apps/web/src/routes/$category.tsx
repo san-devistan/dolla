@@ -1,4 +1,5 @@
 import { NotFoundPage } from "@/components/not-found-page"
+import { uploadAdminCloudinaryFiles } from "@/features/cloudinary/admin-upload"
 import {
   createCloudinaryFolderFn,
   deleteCloudinaryFolderFn,
@@ -405,23 +406,11 @@ function CategoryPage({
 
   async function uploadFilesToShoot(shootPath: string, files: File[]) {
     const uploadFiles = await prepareImageUploadFiles(files)
-    const formData = new FormData()
 
-    formData.set("folderPath", shootPath)
-
-    for (const file of uploadFiles) {
-      formData.append("files", file)
-    }
-
-    const response = await fetch("/api/cloudinary/upload", {
-      method: "POST",
-      body: formData,
+    await uploadAdminCloudinaryFiles({
+      files: uploadFiles,
+      folderPath: shootPath,
     })
-    const result = await response.json()
-
-    if (!response.ok) {
-      throw new Error(getUploadError(result) || "Upload failed.")
-    }
   }
 
   function handleCategoryPhotoUploadClick() {
@@ -465,26 +454,11 @@ function CategoryPage({
 
     try {
       const uploadFiles = await prepareImageUploadFiles(files)
-      const formData = new FormData()
 
-      formData.set(
-        "folderPath",
-        directCategoryShootPath || selectedCategory.path
-      )
-
-      for (const file of uploadFiles) {
-        formData.append("files", file)
-      }
-
-      const response = await fetch("/api/cloudinary/upload", {
-        method: "POST",
-        body: formData,
+      await uploadAdminCloudinaryFiles({
+        files: uploadFiles,
+        folderPath: directCategoryShootPath || selectedCategory.path,
       })
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(getUploadError(result) || "Upload failed.")
-      }
 
       if (uploadInputRef.current) {
         uploadInputRef.current.value = ""
@@ -2385,14 +2359,4 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Something went wrong."
-}
-
-function getUploadError(result: unknown) {
-  if (!result || typeof result !== "object") {
-    return null
-  }
-
-  const error = "error" in result ? result.error : null
-
-  return typeof error === "string" ? error : null
 }

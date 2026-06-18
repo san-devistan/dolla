@@ -1,5 +1,7 @@
 import { assertAdminAuthenticated } from "@/lib/admin-auth.server"
 import {
+  completeCloudinaryDirectUpload,
+  createCloudinaryDirectUploadSignature,
   getCloudinaryErrorMessage,
   normalizeDollaFolderPath,
   replaceCloudinaryAboutImage,
@@ -21,6 +23,10 @@ export const Route = createFileRoute("/api/cloudinary/upload")({
         }
 
         try {
+          if (isJsonRequest(request)) {
+            return Response.json(await handleDirectUploadRequest(request))
+          }
+
           const formData = await request.formData()
           const folderEntry = formData.get("folderPath")
           const folderPath = normalizeDollaFolderPath(
@@ -68,8 +74,58 @@ export const Route = createFileRoute("/api/cloudinary/upload")({
   },
 })
 
+async function handleDirectUploadRequest(request: Request) {
+  const payload = await request.json()
+  const action = getStringField(payload, "action")
+  const folderPath = normalizeDollaFolderPath(
+    getStringField(payload, "folderPath", "Dolla")
+  )
+  const target = getStringField(payload, "target")
+
+  if (action === "sign") {
+    return createCloudinaryDirectUploadSignature({ folderPath, target })
+  }
+
+  if (action === "complete") {
+    return completeCloudinaryDirectUpload({
+      folderPath,
+      target,
+      uploadResult: getObjectField(payload, "uploadResult"),
+    })
+  }
+
+  throw new Error("Unsupported Cloudinary upload action.")
+}
+
+function isJsonRequest(request: Request) {
+  return request.headers
+    .get("content-type")
+    ?.toLowerCase()
+    .includes("application/json")
+}
+
 function isFileEntry(value: FormDataEntryValue): value is File {
   return typeof File !== "undefined" && value instanceof File
+}
+
+function getStringField(data: unknown, key: string, fallback = "") {
+  if (!data || typeof data !== "object") {
+    return fallback
+  }
+
+  const value = Reflect.get(data, key)
+
+  return typeof value === "string" ? value : fallback
+}
+
+function getObjectField(data: unknown, key: string) {
+  if (!data || typeof data !== "object") {
+    return null
+  }
+
+  const value = Reflect.get(data, key)
+
+  return value && typeof value === "object" ? value : null
 }
 
 function getAdminAuthErrorMessage(error: unknown) {
