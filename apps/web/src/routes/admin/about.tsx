@@ -1,7 +1,7 @@
-import { getCloudinaryAboutFn } from "@/features/cloudinary/cloudinary.functions"
+import { AboutPage } from "@/features/cloudinary/about/_pages/page"
+import { getCloudinaryAboutFn } from "@/features/cloudinary/data/functions"
 import { requireAdminAuth } from "@/lib/admin-route-auth"
 import { createNoindexSeoHead } from "@/lib/seo"
-import { AboutPage } from "@/routes/about"
 import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/admin/about")({

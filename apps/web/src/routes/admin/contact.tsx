@@ -1,4 +1,4 @@
-import { getContactPageFn } from "@/features/contact/contact.functions"
+import { getContactPageFn } from "@/features/contact/functions"
 import { requireAdminAuth } from "@/lib/admin-route-auth"
 import { createNoindexSeoHead } from "@/lib/seo"
 import { ContactRoutePage } from "@/routes/contact"

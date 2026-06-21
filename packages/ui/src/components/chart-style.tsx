@@ -1,13 +1,8 @@
 import {
-  THEMES,
+  CHART_THEME_ENTRIES,
   type ChartConfig,
 } from "@workspace/ui/components/chart-context"
 import * as React from "react"
-
-const themeEntries: Array<[keyof typeof THEMES, string]> = [
-  ["light", THEMES.light],
-  ["dark", THEMES.dark],
-]
 
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = React.useMemo(
@@ -33,9 +28,8 @@ function getChartCssText(
   id: string,
   colorConfig: Array<[string, ChartConfig[string]]>
 ) {
-  return themeEntries
-    .map(
-      ([theme, prefix]) => `
+  return CHART_THEME_ENTRIES.map(
+    ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
@@ -46,8 +40,7 @@ ${colorConfig
   .join("\n")}
 }
 `
-    )
-    .join("\n")
+  ).join("\n")
 }
 
 export { ChartStyle }

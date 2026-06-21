@@ -22,9 +22,11 @@ export const Route = createFileRoute("/sitemap.xml")({
       GET: async () => {
         const home = await getCloudinaryHome()
         const categoryPages = await Promise.all(
-          home.categories
-            .filter((category) => !category.isDirectPhotoCategory)
-            .map((category) => getCloudinaryCategory(category.name))
+          home.categories.flatMap((category) =>
+            category.isDirectPhotoCategory
+              ? []
+              : [getCloudinaryCategory(category.name)]
+          )
         )
         const entries = uniqueSitemapEntries([
           ...getStaticSitemapEntries(),

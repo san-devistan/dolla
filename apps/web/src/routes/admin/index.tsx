@@ -1,7 +1,7 @@
-import { getCloudinaryHomeFn } from "@/features/cloudinary/cloudinary.functions"
+import { getCloudinaryHomeFn } from "@/features/cloudinary/data/functions"
+import { DollaHomePage } from "@/features/cloudinary/home/_pages/page"
 import { requireAdminAuth } from "@/lib/admin-route-auth"
 import { createNoindexSeoHead } from "@/lib/seo"
-import { DollaHomePage } from "@/routes/index"
 import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/admin/")({

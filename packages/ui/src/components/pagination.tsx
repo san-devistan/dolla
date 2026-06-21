@@ -42,24 +42,33 @@ type PaginationLinkProps = {
 
 function PaginationLink({
   className,
+  children,
   isActive,
   size = "icon",
   ...props
 }: PaginationLinkProps) {
+  const renderLink = React.useCallback(
+    (linkProps: React.ComponentProps<"a">) => (
+      <a
+        {...linkProps}
+        {...props}
+        aria-current={isActive ? "page" : undefined}
+        data-slot="pagination-link"
+        data-active={isActive}
+      >
+        {children}
+      </a>
+    ),
+    [children, isActive, props]
+  )
+
   return (
     <Button
       variant={isActive ? "outline" : "ghost"}
       size={size}
       className={cn(className)}
       nativeButton={false}
-      render={
-        <a
-          aria-current={isActive ? "page" : undefined}
-          data-slot="pagination-link"
-          data-active={isActive}
-          {...props}
-        />
-      }
+      render={renderLink}
     />
   )
 }

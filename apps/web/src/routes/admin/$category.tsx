@@ -1,7 +1,7 @@
-import { getCloudinaryCategoryFn } from "@/features/cloudinary/cloudinary.functions"
+import { CategoryPage } from "@/features/cloudinary/category/_pages/page"
+import { getCloudinaryCategoryFn } from "@/features/cloudinary/data/functions"
 import { requireAdminAuth } from "@/lib/admin-route-auth"
 import { createNoindexSeoHead } from "@/lib/seo"
-import { CategoryPage } from "@/routes/$category"
 import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/admin/$category")({

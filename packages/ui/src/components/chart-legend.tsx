@@ -1,17 +1,16 @@
 import {
-  type ChartConfig,
   useChart,
+  type ChartConfig,
 } from "@workspace/ui/components/chart-context"
 import {
-  getConfigKey,
   getPayloadConfigFromPayload,
-  getPayloadItemKey,
-  getStringProperty,
-  type LegendPayloadItem,
+  getPayloadKey,
 } from "@workspace/ui/components/chart-utils"
 import { cn } from "@workspace/ui/lib/utils"
 import * as React from "react"
-import type * as RechartsPrimitive from "recharts"
+import * as RechartsPrimitive from "recharts"
+
+const ChartLegend = RechartsPrimitive.Legend
 
 function ChartLegendContent({
   className,
@@ -29,6 +28,8 @@ function ChartLegendContent({
     return null
   }
 
+  const visiblePayload = payload.filter((item) => item.type !== "none")
+
   return (
     <div
       className={cn(
@@ -37,55 +38,48 @@ function ChartLegendContent({
         className
       )}
     >
-      {payload
-        .filter((item) => item.type !== "none")
-        .map((item) => (
+      {visiblePayload.map((item) => {
+        const key = getPayloadKey(item, nameKey)
+        const itemConfig = getPayloadConfigFromPayload(config, item, key)
+
+        return (
           <ChartLegendItem
-            key={getPayloadItemKey(item)}
-            config={config}
+            key={key}
             hideIcon={hideIcon}
             item={item}
-            nameKey={nameKey}
+            itemConfig={itemConfig}
           />
-        ))}
+        )
+      })}
     </div>
   )
 }
 
 function ChartLegendItem({
-  config,
   hideIcon,
   item,
-  nameKey,
+  itemConfig,
 }: {
-  config: ChartConfig
   hideIcon: boolean
-  item: LegendPayloadItem
-  nameKey?: string
+  item: RechartsPrimitive.LegendPayload
+  itemConfig: ChartConfig[string] | undefined
 }) {
-  const key = getConfigKey(nameKey, item.dataKey, "value")
-  const itemConfig = getPayloadConfigFromPayload(config, item, key)
-  const Icon = itemConfig?.icon
-
   return (
-    <div className="flex items-center gap-1.5 [&>svg]:size-3 [&>svg]:text-muted-foreground">
-      {Icon && !hideIcon ? (
-        <Icon />
+    <div className="flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground">
+      {itemConfig?.icon && !hideIcon ? (
+        <itemConfig.icon />
       ) : (
-        <ChartLegendIcon color={getStringProperty(item, "color")} />
+        <ChartLegendIcon color={item.color} />
       )}
       {itemConfig?.label}
     </div>
   )
 }
 
-function ChartLegendIcon({ color }: { color?: string }) {
-  const iconStyle = React.useMemo<React.CSSProperties>(
-    () => ({ backgroundColor: color }),
-    [color]
-  )
+function ChartLegendIcon({ color }: { color: string | undefined }) {
+  const style = React.useMemo(() => ({ backgroundColor: color }), [color])
 
-  return <div className="size-2 shrink-0 rounded-[2px]" style={iconStyle} />
+  return <div className="h-2 w-2 shrink-0 rounded-[2px]" style={style} />
 }
 
-export { ChartLegendContent }
+export { ChartLegend, ChartLegendContent }

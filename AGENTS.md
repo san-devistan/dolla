@@ -39,6 +39,37 @@ from web `@fontsource-variable/*` packages to matching mobile
 Do not hand-edit generated mobile theme files. Change the token source in
 `packages/ui`, then sync the mobile theme.
 
+## File Naming
+
+Use directories as naming context across the entire codebase. For any directory
+that names a domain, workflow, module, or role, do not repeat that directory
+name in descendant filenames unless an external convention requires it.
+
+Framework-mandated filenames, generated files, config entrypoints, and
+third-party convention files may keep their required names.
+
+## Module Layout
+
+Prefer domain-, workflow-, or module-first structure over flat folders once any
+area of the codebase has several related files. This applies across apps,
+packages, backend functions, scripts, tooling, and UI code.
+
+Inside any source folder, group by user-facing workflow, domain concept, or
+module ownership before grouping by implementation role. Avoid broad top-level
+piles of components, hooks, actions, controllers, utilities, or helpers when
+those files actually belong to different workflows or modules.
+
+Within a workflow, domain, or module folder, split by role only when there are
+enough files to justify it:
+
+- `_components/` contains UI implementation private to that workflow or domain.
+- `_lib/` contains state, actions, controllers, adapters, and domain logic.
+- `_pages/` contains page-level compositions used by routes or screens.
+- `_types/` contains shared types when they are large enough to deserve their
+  own file.
+- `_utils/` is a last resort for small pure helpers genuinely reused inside that
+  workflow, domain, or module; prefer named domain files over generic utilities.
+
 ## Quality Gate
 
 Before handing off code, run:
@@ -47,9 +78,29 @@ Before handing off code, run:
 pnpm fix
 ```
 
-Wait for the command to finish. If it reports errors or warnings, fix them and
-run `pnpm fix` again. Repeat until it passes, or clearly explain the remaining
-blocker.
+Wait for the command to finish. It is designed to continue after failed checks
+and print a final summary of failed commands. Treat Oxlint errors and React
+Doctor errors/warnings as blocking quality feedback.
+
+React Doctor warnings are intentionally blocking so agents fix the underlying
+React issues, including warning-level issues. Do not add or modify React Doctor
+config, disable rules, lower severity, or add suppressions merely to make
+`pnpm fix` pass unless the user explicitly asks for that policy change. For
+each React Doctor diagnostic, fix the issue or clearly report why it is a
+confirmed false positive or unrelated pre-existing issue.
+
+React Doctor is used for React-specific diagnostics; Oxlint owns the generic
+lint gate. Do not use React Doctor's duplicate lint pass as a substitute for
+fixing or intentionally configuring Oxlint diagnostics.
+
+Fix every `pnpm fix` diagnostic that is caused by, or directly related to, the
+code you changed. Then run `pnpm fix` again and repeat until the relevant
+diagnostics are resolved.
+
+If remaining errors or warnings are unrelated to the implemented work,
+pre-existing, or confirmed false positives, do not expand the scope to fix them
+unless the user asks. Clearly report the failed command(s), representative
+diagnostics, and why they were left untreated.
 
 ## Skill Selection
 
@@ -68,7 +119,12 @@ first and then use the backend-local skills in `packages/backend/.agents/skills`
 | Backend auth                             | `packages/backend/AGENTS.md`, `convex-dev-better-auth`, and the backend-local Better Auth skills in `packages/backend/.agents/skills/`.                           |
 | Backend email                            | `packages/backend/AGENTS.md`, `convex-dev-resend`, and the backend-local Resend/email skills in `packages/backend/.agents/skills/`.                               |
 | Backend billing                          | `packages/backend/AGENTS.md`, `convex-dev-stripe`, and the backend-local Stripe skills in `packages/backend/.agents/skills/`.                                     |
-| Tooling and architecture                 | `improve-codebase-architecture`                                                                                                                                   |
+| Tooling and architecture                 | `codebase-design`, `improve-codebase-architecture`                                                                                                                |
+
+When reorganizing modules, moving code across files, or improving codebase
+architecture, use the `codebase-design` skill first. Structure changes around
+deep modules with small interfaces, clear seams, and implementation details
+kept local to the owning module.
 
 ## Available MCPs
 

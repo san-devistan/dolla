@@ -1,7 +1,7 @@
-import { getCloudinaryShootFn } from "@/features/cloudinary/cloudinary.functions"
+import { getCloudinaryShootFn } from "@/features/cloudinary/data/functions"
+import { ShootPage } from "@/features/cloudinary/shoot/_pages/page"
 import { requireAdminAuth } from "@/lib/admin-route-auth"
 import { createNoindexSeoHead } from "@/lib/seo"
-import { ShootPage } from "@/routes/$category/$shoot"
 import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/admin/$category/$shoot")({

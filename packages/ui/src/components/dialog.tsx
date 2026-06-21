@@ -44,6 +44,18 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
 }) {
+  const renderCloseButton = React.useCallback(
+    (buttonProps: React.ComponentProps<typeof Button>) => (
+      <Button
+        variant="ghost"
+        className="absolute top-5 right-5 bg-secondary"
+        size="icon-sm"
+        {...buttonProps}
+      />
+    ),
+    []
+  )
+
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -59,13 +71,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-5 right-5 bg-secondary"
-                size="icon-sm"
-              />
-            }
+            render={renderCloseButton}
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -94,6 +100,13 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
+  const renderCloseButton = React.useCallback(
+    (buttonProps: React.ComponentProps<typeof Button>) => (
+      <Button variant="outline" {...buttonProps} />
+    ),
+    []
+  )
+
   return (
     <div
       data-slot="dialog-footer"
@@ -105,7 +118,7 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>
+        <DialogPrimitive.Close render={renderCloseButton}>
           Close
         </DialogPrimitive.Close>
       )}

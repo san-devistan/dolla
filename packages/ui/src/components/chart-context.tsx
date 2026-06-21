@@ -1,7 +1,11 @@
 import * as React from "react"
 
-// Format: { THEME_NAME: CSS_SELECTOR }
-const THEMES = { light: "", dark: ".dark" } as const
+const CHART_THEME_ENTRIES = [
+  ["light", ""],
+  ["dark", ".dark"],
+] as const
+
+type ChartTheme = (typeof CHART_THEME_ENTRIES)[number][0]
 
 export type ChartConfig = Record<
   string,
@@ -10,7 +14,7 @@ export type ChartConfig = Record<
     icon?: React.ComponentType
   } & (
     | { color?: string; theme?: never }
-    | { color?: never; theme: Record<keyof typeof THEMES, string> }
+    | { color?: never; theme: Record<ChartTheme, string> }
   )
 >
 
@@ -19,6 +23,15 @@ type ChartContextProps = {
 }
 
 const ChartContext = React.createContext<ChartContextProps | null>(null)
+
+function ChartProvider({
+  children,
+  config,
+}: React.PropsWithChildren<{ config: ChartConfig }>) {
+  const value = React.useMemo(() => ({ config }), [config])
+
+  return <ChartContext.Provider value={value}>{children}</ChartContext.Provider>
+}
 
 function useChart() {
   const context = React.useContext(ChartContext)
@@ -30,4 +43,4 @@ function useChart() {
   return context
 }
 
-export { ChartContext, THEMES, useChart }
+export { CHART_THEME_ENTRIES, ChartProvider, useChart }

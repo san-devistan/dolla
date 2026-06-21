@@ -1,5 +1,5 @@
-import { getCloudinaryPricingFn } from "@/features/cloudinary/cloudinary.functions"
-import { PricingPage } from "@/features/pricing/pricing-page"
+import { getCloudinaryPricingFn } from "@/features/cloudinary/data/functions"
+import { PricingPage } from "@/features/pricing/page"
 import { createPricingSeoHead } from "@/lib/seo"
 import { createFileRoute } from "@tanstack/react-router"
 

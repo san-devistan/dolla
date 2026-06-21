@@ -1,5 +1,10 @@
 import { Combobox as ComboboxPrimitive } from "@base-ui/react"
-import { Button } from "@workspace/ui/components/button"
+import {
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  useComboboxAnchor,
+} from "@workspace/ui/components/combobox-chips"
 import {
   InputGroup,
   InputGroupAddon,
@@ -7,7 +12,7 @@ import {
   InputGroupInput,
 } from "@workspace/ui/components/input-group"
 import { cn } from "@workspace/ui/lib/utils"
-import { ChevronDownIcon, XIcon, CheckIcon } from "lucide-react"
+import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react"
 import * as React from "react"
 
 const Combobox = ComboboxPrimitive.Root
@@ -34,10 +39,17 @@ function ComboboxTrigger({
 }
 
 function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
+  const renderClearButton = React.useCallback(
+    (buttonProps: React.ComponentProps<typeof InputGroupButton>) => (
+      <InputGroupButton variant="ghost" size="icon-xs" {...buttonProps} />
+    ),
+    []
+  )
+
   return (
     <ComboboxPrimitive.Clear
       data-slot="combobox-clear"
-      render={<InputGroupButton variant="ghost" size="icon-xs" />}
+      render={renderClearButton}
       className={cn(className)}
       {...props}
     >
@@ -57,18 +69,28 @@ function ComboboxInput({
   showTrigger?: boolean
   showClear?: boolean
 }) {
+  const renderInput = React.useCallback(
+    (inputProps: React.ComponentProps<typeof InputGroupInput>) => (
+      <InputGroupInput disabled={disabled} {...inputProps} />
+    ),
+    [disabled]
+  )
+  const renderTrigger = React.useCallback(
+    (triggerProps: React.ComponentProps<typeof ComboboxTrigger>) => (
+      <ComboboxTrigger {...triggerProps} />
+    ),
+    []
+  )
+
   return (
     <InputGroup className={cn("w-auto", className)}>
-      <ComboboxPrimitive.Input
-        render={<InputGroupInput disabled={disabled} />}
-        {...props}
-      />
+      <ComboboxPrimitive.Input render={renderInput} {...props} />
       <InputGroupAddon align="inline-end">
         {showTrigger && (
           <InputGroupButton
             size="icon-xs"
             variant="ghost"
-            render={<ComboboxTrigger />}
+            render={renderTrigger}
             data-slot="input-group-button"
             className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent"
             disabled={disabled}
@@ -136,6 +158,16 @@ function ComboboxItem({
   children,
   ...props
 }: ComboboxPrimitive.Item.Props) {
+  const renderIndicator = React.useCallback(
+    (spanProps: React.ComponentProps<"span">) => (
+      <span
+        className="pointer-events-none absolute right-2 flex size-4 items-center justify-center"
+        {...spanProps}
+      />
+    ),
+    []
+  )
+
   return (
     <ComboboxPrimitive.Item
       data-slot="combobox-item"
@@ -146,11 +178,7 @@ function ComboboxItem({
       {...props}
     >
       {children}
-      <ComboboxPrimitive.ItemIndicator
-        render={
-          <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
-        }
-      >
+      <ComboboxPrimitive.ItemIndicator render={renderIndicator}>
         <CheckIcon className="pointer-events-none" />
       </ComboboxPrimitive.ItemIndicator>
     </ComboboxPrimitive.Item>
@@ -213,71 +241,6 @@ function ComboboxSeparator({
       {...props}
     />
   )
-}
-
-function ComboboxChips({
-  className,
-  ...props
-}: React.ComponentPropsWithRef<typeof ComboboxPrimitive.Chips> &
-  ComboboxPrimitive.Chips.Props) {
-  return (
-    <ComboboxPrimitive.Chips
-      data-slot="combobox-chips"
-      className={cn(
-        "flex min-h-10 flex-wrap items-center gap-1.5 rounded-none border border-transparent border-b-input bg-transparent bg-clip-padding px-0 py-1.5 text-sm transition-[color,border-color] focus-within:border-b-ring has-aria-invalid:border-b-destructive has-data-[slot=combobox-chip]:px-0 dark:has-aria-invalid:border-b-destructive/50",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function ComboboxChip({
-  className,
-  children,
-  showRemove = true,
-  ...props
-}: ComboboxPrimitive.Chip.Props & {
-  showRemove?: boolean
-}) {
-  return (
-    <ComboboxPrimitive.Chip
-      data-slot="combobox-chip"
-      className={cn(
-        "flex h-[calc(--spacing(5.5))] w-fit items-center justify-center gap-1 rounded-none bg-muted px-2 text-xs font-medium whitespace-nowrap text-foreground has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50 has-data-[slot=combobox-chip-remove]:pr-0",
-        className
-      )}
-      {...props}
-    >
-      {children}
-      {showRemove && (
-        <ComboboxPrimitive.ChipRemove
-          render={<Button variant="ghost" size="icon-xs" />}
-          className="-ml-1 opacity-50 hover:opacity-100"
-          data-slot="combobox-chip-remove"
-        >
-          <XIcon className="pointer-events-none" />
-        </ComboboxPrimitive.ChipRemove>
-      )}
-    </ComboboxPrimitive.Chip>
-  )
-}
-
-function ComboboxChipsInput({
-  className,
-  ...props
-}: ComboboxPrimitive.Input.Props) {
-  return (
-    <ComboboxPrimitive.Input
-      data-slot="combobox-chip-input"
-      className={cn("min-w-16 flex-1 outline-none", className)}
-      {...props}
-    />
-  )
-}
-
-function useComboboxAnchor() {
-  return React.useRef<HTMLDivElement | null>(null)
 }
 
 export {

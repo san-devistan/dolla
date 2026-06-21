@@ -1,5 +1,5 @@
-import { ContactPage } from "@/features/contact/contact-page"
-import { getContactPageFn } from "@/features/contact/contact.functions"
+import { getContactPageFn } from "@/features/contact/functions"
+import { ContactPage } from "@/features/contact/page"
 import { createContactSeoHead } from "@/lib/seo"
 import { createFileRoute } from "@tanstack/react-router"
 

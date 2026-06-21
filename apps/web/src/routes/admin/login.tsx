@@ -1,7 +1,7 @@
 import {
   getAdminAuthStateFn,
   loginAdminFn,
-} from "@/features/admin/admin-auth.functions"
+} from "@/features/admin/auth.functions"
 import { getSafeAdminRedirect } from "@/lib/admin-routes"
 import { createNoindexSeoHead } from "@/lib/seo"
 import { createFileRoute, redirect } from "@tanstack/react-router"
@@ -10,7 +10,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { AlertTriangleIcon, LockKeyholeIcon } from "lucide-react"
-import { type FormEvent, useState } from "react"
+import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 
 type AdminLoginSearch = {
   redirect: string
@@ -37,18 +37,13 @@ export const Route = createFileRoute("/admin/login")({
 
 function AdminLoginPage() {
   const { authState } = Route.useRouteContext()
-  const { redirect } = Route.useSearch()
+  const { redirect: redirectTo } = Route.useSearch()
   const loginAdmin = useServerFn(loginAdminFn)
   const [secret, setSecret] = useState("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
 
-  function handleLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    void submitLogin()
-  }
-
-  async function submitLogin() {
+  const submitLogin = useCallback(async () => {
     if (!authState.isConfigured || isBusy) {
       return
     }
@@ -60,7 +55,7 @@ function AdminLoginPage() {
       const result = await loginAdmin({ data: { secret } })
 
       if (result.status === "success") {
-        window.location.assign(redirect)
+        window.location.assign(redirectTo)
         return
       }
 
@@ -70,7 +65,22 @@ function AdminLoginPage() {
     } finally {
       setIsBusy(false)
     }
-  }
+  }, [authState.isConfigured, isBusy, loginAdmin, redirectTo, secret])
+
+  const handleLogin = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      void submitLogin()
+    },
+    [submitLogin]
+  )
+
+  const handleSecretChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setSecret(event.target.value)
+    },
+    []
+  )
 
   return (
     <main className="flex min-h-[90svh] items-center justify-center bg-background px-4 py-16 text-foreground">
@@ -92,7 +102,7 @@ function AdminLoginPage() {
               autoComplete="current-password"
               value={secret}
               disabled={!authState.isConfigured || isBusy}
-              onChange={(event) => setSecret(event.target.value)}
+              onChange={handleSecretChange}
             />
           </div>
           {!authState.isConfigured ? (

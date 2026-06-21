@@ -35,6 +35,13 @@ function SelectTrigger({
 }: SelectPrimitive.Trigger.Props & {
   size?: "sm" | "default"
 }) {
+  const renderIcon = React.useCallback(
+    () => (
+      <ChevronDownIcon className="pointer-events-none size-3.5 text-muted-foreground" />
+    ),
+    []
+  )
+
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
@@ -46,11 +53,7 @@ function SelectTrigger({
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon
-        render={
-          <ChevronDownIcon className="pointer-events-none size-3.5 text-muted-foreground" />
-        }
-      />
+      <SelectPrimitive.Icon render={renderIcon} />
     </SelectPrimitive.Trigger>
   )
 }
@@ -118,6 +121,16 @@ function SelectItem({
   children,
   ...props
 }: SelectPrimitive.Item.Props) {
+  const renderIndicator = React.useCallback(
+    (spanProps: React.ComponentProps<"span">) => (
+      <span
+        className="pointer-events-none absolute right-2 flex size-4 items-center justify-center"
+        {...spanProps}
+      />
+    ),
+    []
+  )
+
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -130,11 +143,7 @@ function SelectItem({
       <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
         {children}
       </SelectPrimitive.ItemText>
-      <SelectPrimitive.ItemIndicator
-        render={
-          <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
-        }
-      >
+      <SelectPrimitive.ItemIndicator render={renderIndicator}>
         <CheckIcon className="pointer-events-none" />
       </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>

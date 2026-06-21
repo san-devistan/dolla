@@ -1,4 +1,4 @@
-import { getAdminAuthStateFn } from "@/features/admin/admin-auth.functions"
+import { getAdminAuthStateFn } from "@/features/admin/auth.functions"
 import { ADMIN_LOGIN_ROUTE, getSafeAdminRedirect } from "@/lib/admin-routes"
 import { redirect } from "@tanstack/react-router"
 

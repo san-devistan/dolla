@@ -282,7 +282,7 @@ function getShootDescription(
 
 function getCategorySeoDetails(slug: string, name: string) {
   return (
-    CATEGORY_SEO[slug as keyof typeof CATEGORY_SEO] ?? {
+    (isCategorySeoSlug(slug) ? CATEGORY_SEO[slug] : undefined) ?? {
       title: `${name} - photographe Paris`,
       description: `Decouvrez la galerie ${name} de Dolla Shashin, photographe professionnelle a Paris et en Ile-de-France.`,
       keywords: `photographe ${name.toLowerCase()} paris, shooting ${name.toLowerCase()} paris, dolla shashin ${name.toLowerCase()}`,
@@ -291,6 +291,10 @@ function getCategorySeoDetails(slug: string, name: string) {
       image: DEFAULT_IMAGE_URL,
     }
   )
+}
+
+function isCategorySeoSlug(slug: string): slug is keyof typeof CATEGORY_SEO {
+  return Object.hasOwn(CATEGORY_SEO, slug)
 }
 
 function getCategorySeoDescription(categoryName: string) {

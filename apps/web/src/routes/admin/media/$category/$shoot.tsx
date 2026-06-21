@@ -5,7 +5,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/admin/media/$category/$shoot")({
   beforeLoad: ({ location }) => requireAdminAuth(location),
-  head: () => createNoindexSeoHead("Admin media | Dolla Shashin"),
   loader: ({ params }) => {
     throw redirect({
       to: ADMIN_SHOOT_ROUTE,
@@ -15,4 +14,5 @@ export const Route = createFileRoute("/admin/media/$category/$shoot")({
       },
     })
   },
+  head: () => createNoindexSeoHead("Admin media | Dolla Shashin"),
 })

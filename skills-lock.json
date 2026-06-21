@@ -37,6 +37,12 @@
       "skillPath": "skills/cloudinary-transformations/SKILL.md",
       "computedHash": "8038bfd19e7c750f80082ed1ba16538e9772537c793f91448572421122445d75"
     },
+    "codebase-design": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/codebase-design/SKILL.md",
+      "computedHash": "2426dc4accf1a85dedfb560edb3a877ec8828b7375ea08c970df2b6c900a2a22"
+    },
     "eas-update-insights": {
       "source": "expo/skills",
       "sourceType": "github",
@@ -95,7 +101,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
-      "computedHash": "ef32aea0a8fab9b365ff9e08a95f8d353e20ca21ea46ec2e73587c86dd341351"
+      "computedHash": "8bf292143ca93b00276a0de0fc5f84f2381f4690c5b0d32e99fa283a072f392f"
     },
     "native-data-fetching": {
       "source": "expo/skills",
