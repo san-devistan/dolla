@@ -2,7 +2,7 @@ import { getErrorMessage } from "@/features/cloudinary/media/_lib/shoot-gallery-
 import { useStableCallback } from "@/features/cloudinary/shared/use-stable-callback"
 import type { ShootPageStateSetters } from "@/features/cloudinary/shoot/_lib/action-types"
 import type { CloudinaryShootPage } from "@/lib/cloudinary.server"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 
 function useShootPageActionRunner({
   setIsBusy,

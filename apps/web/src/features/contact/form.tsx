@@ -3,8 +3,8 @@ import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@workspace/ui/components/button"
 import { Field, FieldGroup, FieldLabel } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import { toast } from "@workspace/ui/components/sonner"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { toast } from "@workspace/ui/lib/toast"
 import { SendIcon } from "lucide-react"
 import {
   type ChangeEventHandler,

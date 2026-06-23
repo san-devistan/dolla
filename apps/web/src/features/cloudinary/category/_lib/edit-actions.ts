@@ -15,7 +15,7 @@ import { getMediaCategoryRoute, getMediaHomeRoute } from "@/lib/admin-routes"
 import type { CloudinaryCategoryPage } from "@/lib/cloudinary.server"
 import { toMediaRouteSegment } from "@/lib/media-route-segment"
 import type { AnyRouter } from "@tanstack/react-router"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import type { FormEvent } from "react"
 
 function useCategoryPageEditActions({

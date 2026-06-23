@@ -8,7 +8,7 @@ import { setContactSettingsFn } from "@/features/contact/functions"
 import { ContactInfo } from "@/features/contact/info"
 import type { ContactConnection, ContactSettings } from "@/lib/contact.server"
 import { useServerFn } from "@tanstack/react-start"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import { cn } from "@workspace/ui/lib/utils"
 import { type FormEvent, useCallback, useMemo, useState } from "react"
 

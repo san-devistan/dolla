@@ -10,7 +10,7 @@ import type {
   ShootPageStateSetters,
 } from "@/features/cloudinary/shoot/_lib/action-types"
 import type { CloudinaryShootPage } from "@/lib/cloudinary.server"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import type { FormEvent } from "react"
 
 function useShootPageCreditActions({

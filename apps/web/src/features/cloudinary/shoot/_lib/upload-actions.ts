@@ -7,7 +7,7 @@ import type {
 } from "@/features/cloudinary/shoot/_lib/action-types"
 import { uploadAdminCloudinaryFiles } from "@/features/cloudinary/uploads/admin"
 import { prepareImageUploadFiles } from "@/features/cloudinary/uploads/image-processing"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import type { ChangeEvent, RefObject } from "react"
 
 function useShootPageUploadActions({

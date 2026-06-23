@@ -1,4 +1,4 @@
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   ChevronLeftIcon,
@@ -14,6 +14,8 @@ import {
   type Formatters,
   type Locale,
 } from "react-day-picker"
+
+import { buttonVariants } from "./button/variants"
 
 const SHORT_MONTH_FORMAT_OPTIONS = { month: "short" } as const
 const CalendarLocaleContext = React.createContext<Partial<Locale> | undefined>(

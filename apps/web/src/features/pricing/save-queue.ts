@@ -1,4 +1,4 @@
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import { useEffect, useRef, useState } from "react"
 
 import {

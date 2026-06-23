@@ -5,7 +5,7 @@ import {
 } from "@/features/cloudinary/data/functions"
 import type { CloudinaryHome } from "@/lib/cloudinary.server"
 import { useServerFn } from "@tanstack/react-start"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import {
   type DragEvent,
   type Dispatch,

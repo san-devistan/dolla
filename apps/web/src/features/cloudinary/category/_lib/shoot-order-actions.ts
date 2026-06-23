@@ -8,7 +8,7 @@ import {
 } from "@/features/cloudinary/category/_lib/utils"
 import { useStableCallback } from "@/features/cloudinary/shared/use-stable-callback"
 import type { CloudinaryShootSummary } from "@/lib/cloudinary.server"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import type { DragEvent } from "react"
 
 const SHOOT_ORDER_STEP = 1000

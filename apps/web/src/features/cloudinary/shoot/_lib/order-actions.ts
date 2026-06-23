@@ -12,7 +12,7 @@ import type {
   ShootPageActionState,
 } from "@/features/cloudinary/shoot/_lib/action-types"
 import type { CloudinaryAsset } from "@/lib/cloudinary.server"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import type { DragEvent } from "react"
 
 const ASSET_ORDER_STEP = 1000

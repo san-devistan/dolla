@@ -15,7 +15,7 @@ import { GalleryHeader } from "@/features/cloudinary/navigation/_components/gall
 import { uploadAdminCloudinaryFiles } from "@/features/cloudinary/uploads/admin"
 import type { CloudinaryAbout } from "@/lib/cloudinary.server"
 import { useServerFn } from "@tanstack/react-start"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   type ChangeEvent,

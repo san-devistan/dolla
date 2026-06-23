@@ -11,7 +11,7 @@ import { useStableCallback } from "@/features/cloudinary/shared/use-stable-callb
 import { uploadAdminCloudinaryFiles } from "@/features/cloudinary/uploads/admin"
 import { prepareImageUploadFiles } from "@/features/cloudinary/uploads/image-processing"
 import type { CloudinaryCategoryPage } from "@/lib/cloudinary.server"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 import type { ChangeEvent, RefObject } from "react"
 
 const ASSET_ORDER_STEP = 1000

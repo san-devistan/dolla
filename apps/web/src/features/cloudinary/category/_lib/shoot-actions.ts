@@ -13,7 +13,7 @@ import {
 } from "@/features/cloudinary/category/_lib/utils"
 import { useStableCallback } from "@/features/cloudinary/shared/use-stable-callback"
 import type { CloudinaryCategoryPage } from "@/lib/cloudinary.server"
-import { toast } from "@workspace/ui/components/sonner"
+import { toast } from "@workspace/ui/lib/toast"
 
 function useCategoryPageShootActions({
   canOrganizeShoots,

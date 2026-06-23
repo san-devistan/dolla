@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import type * as React from "react"
-import { Toaster as Sonner, toast, type ToasterProps } from "sonner"
+import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const SONNER_ICONS = {
   success: <CircleCheckIcon className="size-4" />,
@@ -60,4 +60,4 @@ const Toaster = ({ ...props }: ToasterProps) => {
   )
 }
 
-export { Toaster, toast }
+export { Toaster }
