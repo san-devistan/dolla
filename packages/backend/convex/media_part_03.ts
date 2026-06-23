@@ -10,7 +10,7 @@ import {
   nullableString,
   type reorderAssetLayoutValidator,
   type siteContentBlockValidator,
-} from "./media-part-01"
+} from "./media_part_01"
 
 export function normalizeMediaName(value: string) {
   const name = value.trim()

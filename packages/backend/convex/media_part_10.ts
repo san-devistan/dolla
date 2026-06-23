@@ -7,30 +7,30 @@ import {
   STABLE_SHOOT_FOLDER_PREFIX,
   getActiveCategoryByPath,
   listActiveAssetsForShoot,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   DIRECT_PHOTO_CATEGORY_PATH,
   isDirectPhotoCategoryPath,
   listActiveShoots,
   listActiveShootsForCategory,
-} from "./media-part-02"
-import type { MediaCategory, MediaShoot } from "./media-part-03"
-import type { MediaCategoryFolder } from "./media-part-05"
+} from "./media_part_02"
+import type { MediaCategory, MediaShoot } from "./media_part_03"
+import type { MediaCategoryFolder } from "./media_part_05"
 import {
   deleteShootInConvex,
   getShootCoverAsset,
   moveShootsInConvex,
-} from "./media-part-06"
+} from "./media_part_06"
 import {
   assetView,
   getActiveSiteAssetByKey,
   siteAssetView,
-} from "./media-part-07"
+} from "./media_part_07"
 import {
   getDollaPathDepth,
   getDollaPathLeaf,
   getUniqueDollaPaths,
-} from "./media-part-08"
+} from "./media_part_08"
 
 type GetSiteAssetArgs = {
   key: string

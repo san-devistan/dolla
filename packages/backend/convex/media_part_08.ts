@@ -9,24 +9,24 @@ import {
   getShootByPath,
   listActiveAssetsForCategory,
   listActiveAssetsForShoot,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   getNextAssetRank,
   getNextCategoryRank,
   listActiveShootsForCategory,
-} from "./media-part-02"
+} from "./media_part_02"
 import {
   type MediaAsset,
   type MediaCategory,
   type MediaShoot,
   normalizeMediaName,
-} from "./media-part-03"
+} from "./media_part_03"
 import {
   buildCategoryPath,
   getActiveShootByNameInCategory,
   normalizeDollaPath,
   type SyncAsset,
-} from "./media-part-05"
+} from "./media_part_05"
 
 type CreateCategoryArgs = {
   name: string

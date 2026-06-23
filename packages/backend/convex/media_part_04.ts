@@ -7,12 +7,12 @@ import {
   getCategoryByPath,
   getShootByPath,
   normalizeSiteContentKey,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   getNextHomeCarouselAssetRank,
   isDirectPhotoCategoryPath,
   listActiveCategories,
-} from "./media-part-02"
+} from "./media_part_02"
 
 type PreserveMovedShootMetadataArgs = {
   moves: Array<{

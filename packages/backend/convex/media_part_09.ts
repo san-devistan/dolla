@@ -6,7 +6,7 @@ import {
   type OrderedAssetPatch,
   getCategoryByPath,
   getShootByPath,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   DIRECT_PHOTO_CATEGORY_PATH,
   getNextCategoryRank,
@@ -14,15 +14,15 @@ import {
   isDirectPhotoCategoryPath,
   listActiveCategories,
   listActiveShoots,
-} from "./media-part-02"
-import type { ReorderAssetLayout } from "./media-part-03"
+} from "./media_part_02"
+import type { ReorderAssetLayout } from "./media_part_03"
 import {
   type MediaCategoryFolder,
   type SiteAssetInput,
   type SyncAsset,
   type SyncFolder,
   assertValidAssetLayout,
-} from "./media-part-05"
+} from "./media_part_05"
 
 type RankedShootFolder = SyncFolder & {
   categoryName: string

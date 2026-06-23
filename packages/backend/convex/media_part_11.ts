@@ -6,38 +6,38 @@ import {
   getActiveShootByPath,
   listActiveAssetsForShoot,
   normalizeSiteContentKey,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   isDirectPhotoCategoryPath,
   listActiveCategories,
   listActiveShoots,
   rootFolderView,
-} from "./media-part-02"
-import { normalizeMediaName } from "./media-part-03"
-import { getSiteAssetByKey } from "./media-part-04"
+} from "./media_part_02"
+import { normalizeMediaName } from "./media_part_03"
+import { getSiteAssetByKey } from "./media_part_04"
 import {
   getDirectPhotoCategoryShoot,
   normalizeDollaPath,
-} from "./media-part-05"
-import { deleteShootInConvex, shootFolderView } from "./media-part-06"
-import { assetView, patchOrderedAssets } from "./media-part-07"
+} from "./media_part_05"
+import { deleteShootInConvex, shootFolderView } from "./media_part_06"
+import { assetView, patchOrderedAssets } from "./media_part_07"
 import {
   renameCategoryInConvex,
   renameShootInConvex,
   upsertAssets,
-} from "./media-part-08"
+} from "./media_part_08"
 import {
   getOrderedAssetPatches,
   markMissingAssets,
   normalizeSiteAsset,
   upsertCategories,
   upsertShoots,
-} from "./media-part-09"
+} from "./media_part_09"
 import {
   categoryFolderView,
   deleteCategoryInConvex,
   markMissingShoots,
-} from "./media-part-10"
+} from "./media_part_10"
 
 type RenameFolderArgs = {
   folderPath: string

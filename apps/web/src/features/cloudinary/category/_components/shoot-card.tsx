@@ -67,14 +67,7 @@ function ShootCard({
   const draggable = mode.type === "admin" && mode.canOrganize && !mode.isBusy
 
   return (
-    <article
-      draggable={draggable}
-      className={getShootCardClass({ draggable, mode, shoot })}
-      onDragStart={dragHandlers.handleDragStart}
-      onDragOver={dragHandlers.handleDragOver}
-      onDrop={dragHandlers.handleDrop}
-      onDragEnd={handlers.onDragEnd}
-    >
+    <article className={getShootCardClass({ draggable, mode, shoot })}>
       {mode.type === "admin" && mode.isSwapTarget ? (
         <div className="pointer-events-none absolute inset-2 z-30 border-2 border-brand shadow-[0_0_0_1px_hsl(var(--background)),0_0_18px_hsl(var(--brand)/0.6)]" />
       ) : null}
@@ -190,15 +183,6 @@ function useShootCardDragHandlers({
   shoot: CloudinaryShootSummary
 }) {
   return {
-    handleDragOver: useStableCallback((event: DragEvent<HTMLElement>) => {
-      handlers.onShootDragOver(event, shoot.path)
-    }),
-    handleDragStart: useStableCallback((event: DragEvent<HTMLElement>) => {
-      handlers.onShootDragStart(event, shoot.path)
-    }),
-    handleDrop: useStableCallback((event: DragEvent<HTMLElement>) => {
-      handlers.onShootDrop(event, shoot.path)
-    }),
     handleLinkDragEnd: useStableCallback((event: DragEvent<HTMLElement>) => {
       event.stopPropagation()
 

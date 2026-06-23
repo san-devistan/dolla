@@ -6,30 +6,30 @@ import {
   nullableString,
   reorderAssetLayoutValidator,
   siteContentBlockValidator,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   siteAssetValidator,
   syncAssetValidator,
   syncFolderValidator,
-} from "./media-part-03"
+} from "./media_part_03"
 import {
   preserveMovedShootMetadataHandler,
   setCategoryCoverShootHandler,
   setHomeCarouselAssetHandler,
   setShootCoverHandler,
-} from "./media-part-04"
+} from "./media_part_04"
 import {
   setCategoryDescriptionHandler,
   setShootCreditsHandler,
-} from "./media-part-05"
+} from "./media_part_05"
 import {
   getSiteContentHandler,
   reorderCategoriesHandler,
   reorderShootsHandler,
   setSiteContentHandler,
-} from "./media-part-07"
-import { createCategoryHandler } from "./media-part-08"
-import { getSiteAssetHandler, moveShootsHandler } from "./media-part-10"
+} from "./media_part_07"
+import { createCategoryHandler } from "./media_part_08"
+import { getSiteAssetHandler, moveShootsHandler } from "./media_part_10"
 import {
   deleteFolderHandler,
   getLibraryHandler,
@@ -37,13 +37,13 @@ import {
   reorderAssetsHandler,
   setSiteAssetHandler,
   syncSnapshotHandler,
-} from "./media-part-11"
+} from "./media_part_11"
 import {
   createShootHandler,
   getCategoryHandler,
   getHomeHandler,
   getShootHandler,
-} from "./media-part-12"
+} from "./media_part_12"
 
 export const getSiteContent = query({
   args: {

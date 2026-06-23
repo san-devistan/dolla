@@ -8,7 +8,7 @@ import {
   MAX_SHOOT_CREDITS_LENGTH,
   ORDER_STEP,
   ROOT_FOLDER,
-} from "./media-part-01"
+} from "./media_part_01"
 
 export function rootFolderView() {
   return {

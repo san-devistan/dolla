@@ -7,13 +7,13 @@ import {
   getActiveShootByPath,
   getCategoryByPath,
   listActiveAssetsForShoot,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   getNextShootRank,
   isDirectPhotoCategoryPath,
   listActiveShootsForCategory,
-} from "./media-part-02"
-import type { MediaCategory, MediaShoot } from "./media-part-03"
+} from "./media_part_02"
+import type { MediaCategory, MediaShoot } from "./media_part_03"
 
 function assertShootCanMove(
   shoot: MediaShoot,

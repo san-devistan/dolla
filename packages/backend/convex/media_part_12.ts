@@ -10,29 +10,29 @@ import {
   getShootByPath,
   listActiveAssetsForShoot,
   namesMatch,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   getNextShootRank,
   isDirectPhotoCategoryPath,
   listActiveCategories,
   listActiveHomeCarouselAssets,
   listActiveShootsForCategory,
-} from "./media-part-02"
-import { normalizeMediaName } from "./media-part-03"
+} from "./media_part_02"
+import { normalizeMediaName } from "./media_part_03"
 import {
   getActiveShootByNameInCategory,
   getDirectPhotoCategoryShoot,
   normalizeDollaPath,
-} from "./media-part-05"
-import { shootFolderView } from "./media-part-06"
-import { assetView } from "./media-part-07"
-import { getVirtualDirectPhotoCategory } from "./media-part-09"
+} from "./media_part_05"
+import { shootFolderView } from "./media_part_06"
+import { assetView } from "./media_part_07"
+import { getVirtualDirectPhotoCategory } from "./media_part_09"
 import {
   buildCategorySummaries,
   categoryFolderView,
   isStableShootPath,
   shootSummaryView,
-} from "./media-part-10"
+} from "./media_part_10"
 
 type GetCategoryArgs = {
   categoryPath: string

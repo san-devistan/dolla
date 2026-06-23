@@ -8,13 +8,13 @@ import {
   getActiveCategoryByPath,
   getActiveShootByPath,
   namesMatch,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   DIRECT_PHOTO_CATEGORY_PATH,
   listActiveShootsForCategory,
   normalizeCategoryDescription,
   normalizeShootCredits,
-} from "./media-part-02"
+} from "./media_part_02"
 import {
   type MediaCategory,
   type ReorderAssetLayout,
@@ -22,7 +22,7 @@ import {
   type siteAssetValidator,
   type syncAssetValidator,
   type syncFolderValidator,
-} from "./media-part-03"
+} from "./media_part_03"
 
 type SetCategoryDescriptionArgs = {
   categoryPath: string

@@ -110,24 +110,6 @@ function CategoryCard({
     () => ({ category: toMediaRouteSegment(category.name) }),
     [category.name]
   )
-  const handleArticleDragStart = useCallback(
-    (event: DragEvent<HTMLElement>) => {
-      onCategoryDragStart(event, category.path)
-    },
-    [category.path, onCategoryDragStart]
-  )
-  const handleArticleDragOver = useCallback(
-    (event: DragEvent<HTMLElement>) => {
-      onCategoryDragOver(event, category.path)
-    },
-    [category.path, onCategoryDragOver]
-  )
-  const handleArticleDrop = useCallback(
-    (event: DragEvent<HTMLElement>) => {
-      onCategoryDrop(event, category.path)
-    },
-    [category.path, onCategoryDrop]
-  )
   const handleLinkDragStart = useCategoryLinkDragHandler({
     categoryPath: category.path,
     isAdminMode,
@@ -156,17 +138,12 @@ function CategoryCard({
 
   return (
     <article
-      draggable={draggable}
       className={cn(
         "group relative overflow-hidden border bg-muted transition duration-200",
         draggable ? "cursor-grab active:cursor-grabbing" : "",
         isSwapTarget ? "ring-2 ring-brand/70" : "",
         isDragging ? "opacity-45 ring-2 ring-brand/50" : ""
       )}
-      onDragStart={handleArticleDragStart}
-      onDragOver={handleArticleDragOver}
-      onDrop={handleArticleDrop}
-      onDragEnd={onCategoryDragEnd}
     >
       {isSwapTarget ? (
         <div className="pointer-events-none absolute inset-2 z-30 border-2 border-brand shadow-[0_0_0_1px_hsl(var(--background)),0_0_18px_hsl(var(--brand)/0.6)]" />

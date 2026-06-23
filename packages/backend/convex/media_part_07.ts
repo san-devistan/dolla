@@ -6,18 +6,18 @@ import {
   getActiveCategoryByPath,
   listActiveAssetsForShoot,
   normalizeSiteContentKey,
-} from "./media-part-01"
+} from "./media_part_01"
 import {
   type MediaAsset,
   type SiteAsset,
   normalizeSiteContentBlocks,
-} from "./media-part-03"
+} from "./media_part_03"
 import {
   getSiteAssetByKey,
   getSiteContentByKey,
   patchOrderedCategories,
-} from "./media-part-04"
-import { patchOrderedShoots } from "./media-part-05"
+} from "./media_part_04"
+import { patchOrderedShoots } from "./media_part_05"
 
 type GetSiteContentArgs = {
   key: string
