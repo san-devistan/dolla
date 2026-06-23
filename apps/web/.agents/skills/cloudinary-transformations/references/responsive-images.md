@@ -269,7 +269,6 @@ const image = cld
 
 ```jsx
 import { AdvancedImage, responsive } from "@cloudinary/react"
-
 ;<AdvancedImage
   cldImg={myImage}
   plugins={[responsive({ steps: [800, 1200, 1600] })]}
@@ -686,7 +685,6 @@ module.exports = {
 
 ```jsx
 import Image from "next/image"
-
 ;<Image src="sample.jpg" width={800} height={600} alt="Sample" />
 ```
 
