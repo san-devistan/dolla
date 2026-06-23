@@ -166,7 +166,7 @@ function useDeleteSelectedAssets({
     toast.promise(deleteAssetsPromise, {
       loading: "Deleting photos...",
       success: assetIds.length === 1 ? "Photo deleted" : "Photos deleted",
-      error: (deleteError) => getErrorMessage(deleteError),
+      error: (deleteError: unknown) => getErrorMessage(deleteError),
     })
 
     void deleteAssetsPromise

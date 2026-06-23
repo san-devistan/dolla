@@ -69,7 +69,7 @@ function useShootPageCreditActions({
       toast.promise(saveCreditsPromise, {
         loading: "Saving credits...",
         success: nextCredits ? "Credits saved" : "Credits cleared",
-        error: (creditsError) => getErrorMessage(creditsError),
+        error: (creditsError: unknown) => getErrorMessage(creditsError),
       })
 
       void saveCreditsPromise

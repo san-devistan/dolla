@@ -156,7 +156,7 @@ function useUploadFileChange({
           ? "Preparing and uploading photo..."
           : `Preparing and uploading ${files.length} photos...`,
       success: files.length === 1 ? "Photo uploaded" : "Photos uploaded",
-      error: (uploadError) => getErrorMessage(uploadError),
+      error: (uploadError: unknown) => getErrorMessage(uploadError),
     })
 
     void uploadPromise.catch(() => undefined)
@@ -206,7 +206,7 @@ function useDeleteSelectedAssets({
     toast.promise(deleteAssetsPromise, {
       loading: "Deleting photos...",
       success: assetIds.length === 1 ? "Photo deleted" : "Photos deleted",
-      error: (deleteError) => getErrorMessage(deleteError),
+      error: (deleteError: unknown) => getErrorMessage(deleteError),
     })
 
     void deleteAssetsPromise

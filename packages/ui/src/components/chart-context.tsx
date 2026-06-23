@@ -34,7 +34,7 @@ function ChartProvider({
 }
 
 function useChart() {
-  const context = React.useContext(ChartContext)
+  const context = React.use(ChartContext)
 
   if (!context) {
     throw new Error("useChart must be used within a <ChartContainer />")

@@ -74,7 +74,7 @@ function useShootPageRenameActions({
       toast.promise(renameShootPromise, {
         loading: "Renaming shoot...",
         success: "Shoot renamed",
-        error: (renameError) => getErrorMessage(renameError),
+        error: (renameError: unknown) => getErrorMessage(renameError),
       })
 
       void renameShootPromise

@@ -8,9 +8,33 @@ import {
 } from "@workspace/ui/components/chart-utils"
 import { cn } from "@workspace/ui/lib/utils"
 import * as React from "react"
-import * as RechartsPrimitive from "recharts"
+import type {
+  DefaultLegendContentProps,
+  LegendPayload,
+  LegendProps,
+} from "recharts"
 
-const ChartLegend = RechartsPrimitive.Legend
+type ChartLegendProps = LegendProps
+
+const LazyLegend = React.lazy(async () => {
+  const { Legend } = await import("recharts")
+
+  return {
+    default: function RechartsLegend(props: ChartLegendProps) {
+      return React.createElement(Legend, props)
+    },
+  }
+})
+
+function ChartLegend(props: ChartLegendProps) {
+  return (
+    <React.Suspense fallback={null}>
+      <LazyLegend {...props} />
+    </React.Suspense>
+  )
+}
+
+ChartLegend.displayName = "Legend"
 
 function ChartLegendContent({
   className,
@@ -21,7 +45,7 @@ function ChartLegendContent({
 }: React.ComponentProps<"div"> & {
   hideIcon?: boolean
   nameKey?: string
-} & RechartsPrimitive.DefaultLegendContentProps) {
+} & DefaultLegendContentProps) {
   const { config } = useChart()
 
   if (!payload?.length) {
@@ -61,7 +85,7 @@ function ChartLegendItem({
   itemConfig,
 }: {
   hideIcon: boolean
-  item: RechartsPrimitive.LegendPayload
+  item: LegendPayload
   itemConfig: ChartConfig[string] | undefined
 }) {
   return (

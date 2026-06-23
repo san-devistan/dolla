@@ -153,7 +153,7 @@ function useRenameCategory({
     toast.promise(saveCategoryPromise, {
       loading: "Saving category...",
       success: "Category saved",
-      error: (saveError) => getErrorMessage(saveError),
+      error: (saveError: unknown) => getErrorMessage(saveError),
     })
 
     void saveCategoryPromise

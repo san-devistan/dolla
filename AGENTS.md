@@ -20,10 +20,27 @@ before introducing new patterns.
 source of truth for tokens, component anatomy, variants, naming, and interaction
 patterns.
 
+When building UI in `apps/web`, compose screens from the existing components in
+`packages/ui/src/components` through the `@workspace/ui` exports first. Inspect
+the available component APIs, variants, and composition patterns before creating
+new app-local UI. Do not introduce new web components, wrappers, or interface
+patterns when the existing design-system components can be composed to satisfy
+the need.
+
 The mobile app does not directly reuse web React components. Instead,
 `apps/mobile/components/ui` implements native components with React Native
 Reusables and `@rn-primitives`, while matching the web design system's tokens,
 variants, and component behavior where native constraints allow.
+
+When building UI in `apps/mobile`, compose screens from
+`apps/mobile/components/ui` first. Verify that the native UI components,
+variants, and `@rn-primitives` composition patterns cannot cover the requirement
+before adding a new mobile component or interface pattern.
+
+Across web and mobile, prefer composing existing primitives to the maximum
+reasonable extent. Add a new component only when it represents a genuinely new
+reusable primitive, platform-specific behavior, or feature-owned composition
+that cannot be expressed cleanly with the current component set.
 
 Mobile theme files are generated from the web token source:
 
@@ -63,6 +80,8 @@ Within a workflow, domain, or module folder, split by role only when there are
 enough files to justify it:
 
 - `_components/` contains UI implementation private to that workflow or domain.
+- `_hooks/` contains React or React Native hooks private to that workflow or
+  domain.
 - `_lib/` contains state, actions, controllers, adapters, and domain logic.
 - `_pages/` contains page-level compositions used by routes or screens.
 - `_types/` contains shared types when they are large enough to deserve their
@@ -82,13 +101,6 @@ Wait for the command to finish. It is designed to continue after failed checks
 and print a final summary of failed commands. Treat Oxlint errors and React
 Doctor errors/warnings as blocking quality feedback.
 
-React Doctor warnings are intentionally blocking so agents fix the underlying
-React issues, including warning-level issues. Do not add or modify React Doctor
-config, disable rules, lower severity, or add suppressions merely to make
-`pnpm fix` pass unless the user explicitly asks for that policy change. For
-each React Doctor diagnostic, fix the issue or clearly report why it is a
-confirmed false positive or unrelated pre-existing issue.
-
 React Doctor is used for React-specific diagnostics; Oxlint owns the generic
 lint gate. Do not use React Doctor's duplicate lint pass as a substitute for
 fixing or intentionally configuring Oxlint diagnostics.
@@ -104,27 +116,29 @@ diagnostics, and why they were left untreated.
 
 ## Skill Selection
 
-Read only the skill files needed for the task. Prefer repo-local skills in
-`.agents/skills`. For backend-owned features, read `packages/backend/AGENTS.md`
-first and then use the backend-local skills in `packages/backend/.agents/skills`.
+Read only the skill files needed for the task. Select skills by the workspace
+being touched first, then add cross-cutting skills for the specific technology
+or concern. If multiple rows match, use the smallest useful set and read them in
+the order listed.
 
-| Work type                                | Primary skills                                                                                                                                                    |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Global web UI, styling, design review    | `frontend-design`, `web-design-guidelines`, `shadcn`, `vercel-react-best-practices`                                                                               |
-| Shared React component APIs              | `vercel-composition-patterns`, `usehooks-ts`, `shadcn`                                                                                                            |
-| Web app routing, loaders, SSR, data flow | `tanstack-start-best-practices`, `tanstack-router-best-practices`, `tanstack-query-best-practices`, `tanstack-integration-best-practices`, `native-data-fetching` |
-| Mobile screens, navigation, native UI    | `building-native-ui`, `vercel-react-native-skills`, `react-native-reusables`, `expo-tailwind-setup`                                                               |
-| Mobile builds, releases, native modules  | `expo-dev-client`, `expo-deployment`, `upgrading-expo`, `expo-module`, `Expo UI SwiftUI`, `use-dom`                                                               |
-| Convex backend                           | `packages/backend/AGENTS.md`, then the needed backend-local Convex skills in `packages/backend/.agents/skills/`.                                                  |
-| Backend auth                             | `packages/backend/AGENTS.md`, `convex-dev-better-auth`, and the backend-local Better Auth skills in `packages/backend/.agents/skills/`.                           |
-| Backend email                            | `packages/backend/AGENTS.md`, `convex-dev-resend`, and the backend-local Resend/email skills in `packages/backend/.agents/skills/`.                               |
-| Backend billing                          | `packages/backend/AGENTS.md`, `convex-dev-stripe`, and the backend-local Stripe skills in `packages/backend/.agents/skills/`.                                     |
-| Tooling and architecture                 | `codebase-design`, `improve-codebase-architecture`                                                                                                                |
+For backend-owned features, read `packages/backend/AGENTS.md` first and then use
+the backend-local skills in `packages/backend/.agents/skills`.
 
-When reorganizing modules, moving code across files, or improving codebase
-architecture, use the `codebase-design` skill first. Structure changes around
-deep modules with small interfaces, clear seams, and implementation details
-kept local to the owning module.
+| Scope / workspace                    | Invoke when                                                                               | Primary skills                                                                                                                                                    |
+| ------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`                           | Routes, loaders, SSR, server functions, web data flow, or TanStack wiring                 | `tanstack-start-best-practices`, `tanstack-router-best-practices`, `tanstack-query-best-practices`, `tanstack-integration-best-practices`, `native-data-fetching` |
+| `apps/web`, `packages/ui`            | Global web UI, styling, design review, shadcn-style components, web tokens                | `frontend-design`, `web-design-guidelines`, `shadcn`, `vercel-react-best-practices`                                                                               |
+| `packages/ui`, shared React packages | Shared React component APIs, composition patterns, compound components, render props      | `vercel-composition-patterns`, `shadcn`                                                                                                                           |
+| React web TypeScript workspaces      | Browser/SSR-safe React hooks, storage, media queries, observers, timers, DOM events       | `usehooks-ts`, plus the workspace-specific React skills for the area being changed.                                                                               |
+| `apps/mobile`                        | Screens, navigation, native UI, NativeWind, React Native Reusables                        | `building-native-ui`, `vercel-react-native-skills`, `react-native-reusables`, `expo-tailwind-setup`                                                               |
+| `apps/mobile`                        | Builds, releases, native modules, Expo upgrades, native/web interop                       | `expo-dev-client`, `expo-deployment`, `upgrading-expo`, `expo-module`, `Expo UI SwiftUI`, `use-dom`                                                               |
+| `packages/backend`                   | Convex schema, functions, generated API exports, and backend integrations                 | `packages/backend/AGENTS.md`, then the needed backend-local Convex skills in `packages/backend/.agents/skills/`.                                                  |
+| `packages/backend`                   | Better Auth integration, auth models, sessions, middleware, or auth config                | `packages/backend/AGENTS.md`, `convex-dev-better-auth`, and the backend-local Better Auth skills in `packages/backend/.agents/skills/`.                           |
+| `packages/backend`                   | Transactional email, Resend provider setup, templates, or email delivery                  | `packages/backend/AGENTS.md`, `convex-dev-resend`, and the backend-local Resend/email skills in `packages/backend/.agents/skills/`.                               |
+| `packages/backend`                   | Stripe billing, checkout, webhooks, subscriptions, invoices, or entitlements              | `packages/backend/AGENTS.md`, `convex-dev-stripe`, and the backend-local Stripe skills in `packages/backend/.agents/skills/`.                                     |
+| Any TypeScript workspace             | Nontrivial Effect services, Layers, typed errors, Config, Schema, runtime, or tests       | `effect-ts`, plus the package-specific skills for the workspace being changed.                                                                                    |
+| Any TypeScript workspace             | Type modeling, explicit errors, module APIs, refactors, boundaries, or TS maintainability | `typescript-code-quality`, plus the package-specific skills for the workspace being changed.                                                                      |
+| Root, `scripts`, workspace config    | Monorepo structure, package boundaries, Turbo tasks, caching, or repo tooling             | `turborepo`, `improve-codebase-architecture`                                                                                                                      |
 
 ## Available MCPs
 
@@ -132,7 +146,6 @@ kept local to the owning module.
 | ----------- | ---------------------------------------------------------------------------------------------------------- |
 | Convex      | Inspect deployments, tables, function specs, logs, environment variables, and run Convex functions.        |
 | Better Auth | Inspect Better Auth docs and integration guidance for backend auth work.                                   |
-| Resend      | Inspect Resend email provider docs and resources for backend transactional email work.                     |
 | Stripe      | Inspect Stripe docs and resources for backend billing and payment work.                                    |
 | shadcn      | Search registries, inspect component examples, and get add commands for shadcn components.                 |
 | Vercel      | Inspect projects, deployments, runtime/build logs, toolbar comments, domains, and deployment access links. |

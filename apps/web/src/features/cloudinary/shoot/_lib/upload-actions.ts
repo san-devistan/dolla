@@ -77,7 +77,7 @@ function useShootPageUploadActions({
             ? "Preparing and uploading photo..."
             : `Preparing and uploading ${files.length} photos...`,
         success: files.length === 1 ? "Photo uploaded" : "Photos uploaded",
-        error: (uploadError) => getErrorMessage(uploadError),
+        error: (uploadError: unknown) => getErrorMessage(uploadError),
       })
 
       void uploadPromise.catch(() => undefined)

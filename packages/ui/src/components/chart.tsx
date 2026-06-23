@@ -11,9 +11,21 @@ import {
 } from "@workspace/ui/components/chart-context"
 import { cn } from "@workspace/ui/lib/utils"
 import * as React from "react"
-import * as RechartsPrimitive from "recharts"
+import type { ResponsiveContainerProps } from "recharts"
 
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const
+
+const LazyResponsiveContainer = React.lazy(async () => {
+  const { ResponsiveContainer } = await import("recharts")
+
+  return {
+    default: function RechartsResponsiveContainer(
+      props: ResponsiveContainerProps
+    ) {
+      return React.createElement(ResponsiveContainer, props)
+    },
+  }
+})
 
 function ChartContainer({
   id,
@@ -24,9 +36,7 @@ function ChartContainer({
   ...props
 }: React.ComponentProps<"div"> & {
   config: ChartConfig
-  children: React.ComponentProps<
-    typeof RechartsPrimitive.ResponsiveContainer
-  >["children"]
+  children: ResponsiveContainerProps["children"]
   initialDimension?: {
     width: number
     height: number
@@ -47,11 +57,11 @@ function ChartContainer({
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer
-          initialDimension={initialDimension}
-        >
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        <React.Suspense fallback={null}>
+          <LazyResponsiveContainer initialDimension={initialDimension}>
+            {children}
+          </LazyResponsiveContainer>
+        </React.Suspense>
       </div>
     </ChartProvider>
   )

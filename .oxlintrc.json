@@ -37,7 +37,7 @@
     "max-lines": [
       "error",
       {
-        "max": 500,
+        "max": 400,
         "skipBlankLines": true,
         "skipComments": true
       }
@@ -102,7 +102,6 @@
     ".vinxi/**",
     "coverage/**",
     "dist/**",
-    "dolla/**",
     "node_modules/**",
     "apps/web/src/routeTree.gen.*",
     "packages/backend/convex/_generated/**"

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "ignore": {
+    "files": ["**/.output/**"],
+    "overrides": [
+      {
+        "files": [
+          "components/ui/**",
+          "apps/mobile/components/ui/**",
+          "packages/ui/src/components/**",
+          "src/components/**"
+        ],
+        "rules": [
+          "deslop/unused-file",
+          "react-doctor/no-multi-comp",
+          "react-doctor/only-export-components"
+        ]
+      },
+      {
+        "files": [
+          "packages/ui/src/components/carousel.tsx",
+          "src/components/carousel.tsx"
+        ],
+        "rules": [
+          "react-doctor/no-pass-data-to-parent",
+          "react-doctor/no-prop-callback-in-effect"
+        ]
+      },
+      {
+        "files": [
+          "packages/ui/src/components/chart.tsx",
+          "packages/ui/src/components/chart-legend.tsx",
+          "packages/ui/src/components/chart-tooltip.tsx",
+          "src/components/chart.tsx",
+          "src/components/chart-legend.tsx",
+          "src/components/chart-tooltip.tsx"
+        ],
+        "rules": ["react-doctor/prefer-dynamic-import"]
+      }
+    ]
+  }
+}

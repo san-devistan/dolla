@@ -114,7 +114,7 @@ function useCreateShoot({
           ? "Creating shoot and uploading photos..."
           : "Creating shoot...",
       success: "Shoot created",
-      error: (createError) => getErrorMessage(createError),
+      error: (createError: unknown) => getErrorMessage(createError),
     })
 
     void createShootPromise

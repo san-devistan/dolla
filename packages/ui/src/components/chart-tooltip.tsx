@@ -9,13 +9,15 @@ import {
 } from "@workspace/ui/components/chart-utils"
 import { cn } from "@workspace/ui/lib/utils"
 import * as React from "react"
-import * as RechartsPrimitive from "recharts"
-import type { TooltipValueType } from "recharts"
+import type {
+  DefaultTooltipContentProps,
+  TooltipProps,
+  TooltipValueType,
+} from "recharts"
 
 type TooltipNameType = number | string
-type ChartTooltipContentProps = React.ComponentProps<
-  typeof RechartsPrimitive.Tooltip
-> &
+type ChartTooltipProps = TooltipProps<TooltipValueType, TooltipNameType>
+type ChartTooltipContentProps = ChartTooltipProps &
   React.ComponentProps<"div"> & {
     hideLabel?: boolean
     hideIndicator?: boolean
@@ -23,13 +25,29 @@ type ChartTooltipContentProps = React.ComponentProps<
     nameKey?: string
     labelKey?: string
   } & Omit<
-    RechartsPrimitive.DefaultTooltipContentProps<
-      TooltipValueType,
-      TooltipNameType
-    >,
+    DefaultTooltipContentProps<TooltipValueType, TooltipNameType>,
     "accessibilityLayer"
   >
-const ChartTooltip = RechartsPrimitive.Tooltip
+
+const LazyTooltip = React.lazy(async () => {
+  const { Tooltip } = await import("recharts")
+
+  return {
+    default: function RechartsTooltip(props: ChartTooltipProps) {
+      return React.createElement(Tooltip, props)
+    },
+  }
+})
+
+function ChartTooltip(props: ChartTooltipProps) {
+  return (
+    <React.Suspense fallback={null}>
+      <LazyTooltip {...props} />
+    </React.Suspense>
+  )
+}
+
+ChartTooltip.displayName = "Tooltip"
 
 function ChartTooltipContent({
   active,

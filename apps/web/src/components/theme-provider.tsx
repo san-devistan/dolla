@@ -1,14 +1,22 @@
 "use client"
 
-import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes"
+import {
+  ThemeProvider as NextThemesProvider,
+  useTheme,
+  type ThemeProviderProps as NextThemesProviderProps,
+} from "next-themes"
 import * as React from "react"
+
+const NextThemesProviderWithChildren: React.ComponentType<
+  React.PropsWithChildren<NextThemesProviderProps>
+> = NextThemesProvider
 
 function ThemeProvider({
   children,
   ...props
-}: React.ComponentProps<typeof NextThemesProvider>) {
+}: React.PropsWithChildren<NextThemesProviderProps>) {
   return (
-    <NextThemesProvider
+    <NextThemesProviderWithChildren
       attribute="class"
       defaultTheme="light"
       enableSystem
@@ -17,7 +25,7 @@ function ThemeProvider({
     >
       <ThemeHotkey />
       {children}
-    </NextThemesProvider>
+    </NextThemesProviderWithChildren>
   )
 }
 

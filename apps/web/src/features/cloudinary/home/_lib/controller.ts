@@ -91,7 +91,7 @@ function useHomePageController(initialHome: CloudinaryHome) {
       toast.promise(createCategoryPromise, {
         loading: "Creating category...",
         success: "Category created",
-        error: (createError) => getErrorMessage(createError),
+        error: (createError: unknown) => getErrorMessage(createError),
       })
 
       void createCategoryPromise

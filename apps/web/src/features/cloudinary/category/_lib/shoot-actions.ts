@@ -122,7 +122,7 @@ function useDeleteSelectedShoots({
     toast.promise(deleteShootsPromise, {
       loading: "Deleting shoots...",
       success: shootPaths.length === 1 ? "Shoot deleted" : "Shoots deleted",
-      error: (deleteError) => getErrorMessage(deleteError),
+      error: (deleteError: unknown) => getErrorMessage(deleteError),
     })
 
     void deleteShootsPromise
@@ -192,7 +192,7 @@ function useMoveSelectedShoots({
         shootPaths.length === 1
           ? `Shoot moved to ${targetCategory.name}`
           : `Shoots moved to ${targetCategory.name}`,
-      error: (moveError) => getErrorMessage(moveError),
+      error: (moveError: unknown) => getErrorMessage(moveError),
     })
 
     void moveShootsPromise
