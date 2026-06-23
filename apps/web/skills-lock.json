@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "skills": {
+    "ai-seo": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "skillPath": "skills/ai-seo/SKILL.md",
+      "computedHash": "8fbda031c25d3a198725dd8b5a61133d2ac5c409f7b79fe893ee6b77b84d9b54"
+    },
+    "cloudinary-docs": {
+      "source": "cloudinary-devs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudinary-docs/SKILL.md",
+      "computedHash": "008ae2171abcd39257acb7393c04560e1825f98d79616e755f05a79bf39b058a"
+    },
+    "cloudinary-react": {
+      "source": "cloudinary-devs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudinary-react/SKILL.md",
+      "computedHash": "ca9de3d607bdd0886909cac415954226cae1430aef3038c13c1bff58ce574dad"
+    },
+    "cloudinary-transformations": {
+      "source": "cloudinary-devs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudinary-transformations/SKILL.md",
+      "computedHash": "8038bfd19e7c750f80082ed1ba16538e9772537c793f91448572421122445d75"
+    },
+    "programmatic-seo": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "skillPath": "skills/programmatic-seo/SKILL.md",
+      "computedHash": "0bbdcbacfbe46fd78d774041ee49afd313505bb435b775dc246f4b8e6981d797"
+    },
+    "seo-audit": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "skillPath": "skills/seo-audit/SKILL.md",
+      "computedHash": "f2dc52130189068981f21e1c0bdc4471ac7cd9b08d8a1320604411aa0f950385"
+    },
+    "tanstack-integration-best-practices": {
+      "source": "deckardger/tanstack-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-integration/SKILL.md",
+      "computedHash": "f8454d0835f04539c0d90a5a481937bc0e1cd7e31ac8610f302abd3421f3d24a"
+    },
+    "tanstack-query-best-practices": {
+      "source": "deckardger/tanstack-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-query/SKILL.md",
+      "computedHash": "21d2e8b7468a81d772b6527ad8ca178cc2f3f08af777bb9061333013ee88a0c9"
+    },
+    "tanstack-router-best-practices": {
+      "source": "deckardger/tanstack-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-router/SKILL.md",
+      "computedHash": "65764bc7b90e47f6023cb7f89b3af93eaaafc517754f10b9382e184d4646a77d"
+    },
+    "tanstack-start-best-practices": {
+      "source": "deckardger/tanstack-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-start/SKILL.md",
+      "computedHash": "8b073187405a10f9997158f9139a9664cc801595d2fe63d542a0bac9bf2152f5"
+    },
+    "vercel-composition-patterns": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/composition-patterns/SKILL.md",
+      "computedHash": "575757e3e25761c8c562d6e395d29f0b76c98b1273c0bd72d88e6ab1bc9c7d42"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
+    }
+  }
+}
